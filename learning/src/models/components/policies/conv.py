@@ -55,11 +55,6 @@ class ConvPolicy(BasePolicy):
 
     def forward(self, x):
         out = x
-        params = 0
         for layer in self.net:
             out = layer(out)
-            print(f"layer name: {layer.__class__.__name__}, output shape: {out.shape}")
-            params += sum(p.numel() for p in layer.parameters())
-        print(f"Total number of parameters: {params}")
-        exit()
         return out
