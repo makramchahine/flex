@@ -1,4 +1,4 @@
-# FLEX: FLY LEXICAL
+# Flex: Fly lexical
 
 ## General
 
