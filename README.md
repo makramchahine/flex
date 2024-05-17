@@ -4,7 +4,7 @@
 
 ### Setup
 ```
-$ conda create -n fm_flight python==3.9
+$ conda create -n flex python==3.9
 $ pip install ipdb
 # install torch; check https://pytorch.org/get-started/locally/
 ```
