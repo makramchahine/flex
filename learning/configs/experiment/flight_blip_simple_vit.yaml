@@ -37,8 +37,7 @@ model:
 data:
   batch_size: 1
   num_workers: 1 # NOTE: otherwise cannot run online closed loop eval
-  
-  use_roi: false
+
   use_standardize: false
   use_lavis_preprocess: true
   lavis_preprocess_cfg:

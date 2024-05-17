@@ -4,9 +4,11 @@
 
 ### Setup
 ```
-$ conda create -n flex python==3.9
-$ pip install ipdb
+conda create -n flex python==3.9
+conda activate flex
+pip install ipdb
 # install torch; check https://pytorch.org/get-started/locally/
+pip install torch torchvision torchaudio
 ```
 
 ## Learning
@@ -14,24 +16,25 @@ $ pip install ipdb
 ### Setup
 Installation.
 ```
-$ pip install hydra-core==1.3.2
-$ pip install hydra_colorlog --upgrade
-$ cd learning
-$ pip install -e .
-$ pip install tensorboard
-$ pip install cvxopt
-$ pip install pyrootutils
-$ pip install salesforce-lavis # for BLIP
-$ pip install vit-pytorch==1.2.4 # transformer-based policy
+pip install hydra-core==1.3.2
+pip install hydra_colorlog --upgrade
+cd learning
+pip install -e .
+pip install tensorboard
+pip install cvxopt
+pip install pyrootutils
+pip install h5py
+pip install salesforce-lavis # for BLIP
+pip install vit-pytorch==1.2.4 # transformer-based policy
 ```
 
-copy learning/src/models/components/extractors/eva_vit.py to installation lavis/model/eva_vit.py (probably @ ~/miniconda3/envs/fm_flight/lib/python3.9/site-packages/lavis/models/eva_vit.py)
+copy learning/src/models/components/extractors/eva_vit.py to installation lavis/model/eva_vit.py (probably @ ~/miniconda3/envs/flex/lib/python3.9/site-packages/lavis/models/eva_vit.py)
 
 
 Setup paths.
 ```
-$ export DATA_DIR=<directory-of-dataset>
-$ export LOG_DIR=<directory-to-store-outputs>
+export DATA_DIR=<directory-of-dataset>
+export LOG_DIR=<directory-to-store-outputs>
 ```
 You can also edit and run `scripts/setup_macro.sh`.
 

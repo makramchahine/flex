@@ -10,7 +10,6 @@ mode: IL
 buffer_size: 1000
 snippet_size: 100
 
-use_roi: true
 use_standardize: true
 use_clip_preprocess: false
 use_lavis_preprocess: false

@@ -5,7 +5,6 @@ import numpy as np
 
 import torchvision.transforms.functional as TF
 from torchvision.transforms import InterpolationMode
-from vista.entities.sensors.Camera import Camera
 
 try:
     import clip
@@ -55,16 +54,9 @@ def transform_rgb(img: np.ndarray,
                   sensor: Camera,
                   train: bool,
                   label: float = None,
-                  use_roi: bool = True,
                   use_standardize: bool = True,
                   use_clip_preprocess: bool = False,
                   lavis_preprocessor: str = None):
-    if use_roi:
-        if hasattr(sensor, "get_roi"):
-            (i1, j1, i2, j2) = sensor.get_roi()
-        else:
-            (i1, j1, i2, j2) = sensor.camera_param.get_roi()
-        img = img[i1:i2, j1:j2]
     # need copy here probably since img is not contiguous
     img = img.copy()
     img = TF.to_tensor(img)

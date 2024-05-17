@@ -23,7 +23,6 @@ class FlightILDataset(IterableDataset):
             train: Optional[bool] = False,
             shuffle: Optional[bool] = True,
             snippet_size: Optional[int] = 100,
-            use_roi: Optional[bool] = True,
             use_standardize: Optional[bool] = True,
             use_clip_preprocess: Optional[bool] = False,
             use_lavis_preprocess: Optional[bool] = False,
@@ -31,7 +30,6 @@ class FlightILDataset(IterableDataset):
             **kwargs,
     ):
         self.data_path = data_path[0]
-        self._use_roi = use_roi
         self._use_standardize = use_standardize
         self._use_clip_preprocess = use_clip_preprocess
         self._use_lavis_preprocess = use_lavis_preprocess
@@ -71,7 +69,6 @@ class FlightILDataset(IterableDataset):
 
         self._transform_rgb = partial(
             transform_rgb,
-            use_roi=self._use_roi,
             use_standardize=self._use_standardize,
             use_clip_preprocess=self._use_clip_preprocess,
             lavis_preprocessor=self._lavis_preprocessor,
