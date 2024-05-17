@@ -1,4 +1,4 @@
-_target_: src.models.components.policies.conv.ResNetPolicy
+_target_: src.models.components.policies.resnet.ResNetPolicy
 fc_cfg: [64, 128, 128, 128, 4]
 fc_bias: true
 norm_cfg:
