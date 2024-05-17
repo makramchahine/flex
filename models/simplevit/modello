@@ -6,7 +6,7 @@ test: false
 compile: false
 inference: false
 ckpt_path:
-- /home/makramchahine/repos/fm_flight/local/train_flight/2024-03-15/18-53-54/checkpoints/step_400000.ckpt
+- [PATH TO CKPT]
 seed: 42
 profiler: simple
 data:

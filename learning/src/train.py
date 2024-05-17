@@ -47,8 +47,6 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         Tuple[dict, dict]: Dict with metrics and dict with all instantiated objects.
     """
 
-    OmegaConf.save(config=cfg, f="/home/makramchahine/Desktop/modelconv")
-
     if cfg.get("pytorch_sharing_strategy"):
         import torch.multiprocessing
         torch.multiprocessing.set_sharing_strategy(cfg.pytorch_sharing_strategy)
@@ -132,29 +130,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         log.info(f"Best ckpt path: {ckpt_path}")
 
     if cfg.get("inference"):
-        from PIL import Image
-        from torchvision import transforms
-        log.info("Starting inference!")
-
-        image_path = "/home/makramchahine/repos/fm_flight/BLIP2_DATASET/eval/save-flight-02.13.2024_21.41.47.286898/000025a.png"
-
-        # load the image
-        img = Image.open(image_path)
-        # make the image have 3 channels
-        img = img.convert('RGB')
-
-        # resize the image to 224x224
-        img = img.resize((224, 224))
-
-        # convert the image to a tensor
-        img = transforms.ToTensor()(img).to(device)
-
-        text = "fly to red object"
-
-        # run inference
-        preds = model.forward({"image": img, "text": text})
         return None
-
 
     test_metrics = trainer.callback_metrics
 

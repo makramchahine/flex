@@ -168,28 +168,3 @@ class FlightILDataset(IterableDataset):
 
 def worker_init_fn(worker_id):
     worker_info = torch.utils.data.get_worker_info()
-
-
-
-# if __name__ == "__main__":
-#     dataset = FlightILDataset(data_path=["/home/makramchahine/repos/fm_flight/BLIP2_DATASET/train/"])
-#     data_loader = DataLoader(dataset, batch_size=1)
-#
-#     i = 0
-#     for sample in data_loader:
-#         text = sample[0]['text']
-#         # get the image from the sample
-#         img = sample[0]['image']
-#         # convert the torch.Size([1, 3, 224, 224]) tensor to an image numpy array
-#         img = img.squeeze().permute(1, 2, 0).numpy()
-#         # colors are inverted so we need to invert them back
-#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-#         # use cv to show the image until space is pressed
-#         cv2.imshow('image', img)
-#         cv2.waitKey(0)
-#         # break if key is escape
-#         if cv2.waitKey(0) == 27:
-#             break
-#         i+=1
-#         # print(i)
-

@@ -5,7 +5,8 @@ train: true
 test: false
 compile: false
 inference: false
-ckpt_path: null
+ckpt_path:
+- - [PATH TO CKPT]
 seed: 42
 profiler: simple
 data:

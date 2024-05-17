@@ -8,8 +8,9 @@ import numpy as np
 from einops import rearrange
 
 # add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# import modello
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(cur_dir))
+# import model
 from model_loader import modello, device
 from tqdm import tqdm
 from analysis.utils import *
@@ -184,14 +185,13 @@ def flip_step(img, txt, n_step, idx=0, n_swp=4):
 if __name__ == "__main__":
     texts = ["reach the watermelon"]
     inst = texts[0]
-    # list all images in the directory
-    images = ["/home/makramchahine/repos/fm_flight/analysis/img_test/00001760.png"]
+    images = ["/img_test/00001760.png"]
 
     if not os.path.exists("results"):
         os.makedirs("results")
 
     LAYERS = ["OG IMG", "BLIP2", "LIN_EXT", "LIN_EMB", "ATT_1", "LIN_1", "ATT2", "LIN 2", "ATT 3", "LIN 3"]
-    CLUSTEZ = "manual"
+    CLUSTEZ = "manual" # options are "manual", "elbow", "silhouette"
 
     SC = 7
     EC = 11
@@ -256,59 +256,56 @@ if __name__ == "__main__":
                 ax.set_aspect('equal', 'box')
                 plt.tight_layout()
 
-        #     text = inst.replace(" ", "-")
-        #     file_name = f"{text}_{LAYERS[layer]}_{CLUSTEZ}.png"
-        #     # make a folder named like the filename
-        #     if not os.path.exists(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}"):
-        #         os.makedirs(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}")
-        #     file_name = file_name.replace(".png", f"_{k}.png")
-        #     # add folder to the file name
-        #     file_name = f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/{file_name}"
-        #     plt.gcf()
-        #     # save the figure in the folder
-        #     plt.savefig(file_name, dpi=300)
-        #     # kill the figure
-        #     plt.close()
-        #     print(f"Saved {file_name}")
-        #
-            plt.show()
+            text = inst.replace(" ", "-")
+            file_name = f"{text}_{LAYERS[layer]}_{CLUSTEZ}.png"
+            # make a folder named like the filename
+            if not os.path.exists(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}"):
+                os.makedirs(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}")
+            file_name = file_name.replace(".png", f"_{k}.png")
+            # add folder to the file name
+            file_name = f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/{file_name}"
+            plt.gcf()
+            # save the figure in the folder
+            plt.savefig(file_name, dpi=300)
+            # kill the figure
+            plt.close()
+            print(f"Saved {file_name}")
 
-        # # make a new figure that is a 2D heatmap of the output[-1]
-        # OUTS = np.array(OUTS)
-        # # save the output to a file
-        # np.save(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/outputs.npy", OUTS)
-        # # get the yaw rates
-        # yaw = OUTS[:, -1]
-        # # if not 1D, reshape to 1D
-        # if len(yaw.shape) > 1:
-        #     yaw = yaw.reshape(-1)
-        # # reshape to square by getting sqrt
-        # n = int(np.sqrt(yaw.shape[0]))
-        # yaw = yaw.reshape(n, n)
-        # # plot the heatmap
-        # plt.imshow(yaw, cmap='viridis')
-        # plt.colorbar()
-        # # set max min to [-0.15, 0.15]
-        # plt.clim(-0.15, 0.15)
-        # plt.title("Yaw Rates")
-        # plt.savefig(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/yaw_rates.png", dpi=300)
-        # # plt.show()
-        # plt.close()
-        #
-        # # do the same for the vz values
-        # vzs = OUTS[:, 2]
-        # # if not 1D, reshape to 1D
-        # if len(vzs.shape) > 1:
-        #     vzs = vzs.reshape(-1)
-        # # reshape to square by getting sqrt
-        # n = int(np.sqrt(vzs.shape[0]))
-        # vzs = vzs.reshape(n, n)
-        # # plot the heatmap
-        # plt.imshow(vzs, cmap='viridis')
-        # plt.colorbar()
-        # # set max min to [-0.15, 0.15]
-        # plt.clim(-0.08, 0.08)
-        # plt.title("Vz velocities")
-        # plt.savefig(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/vz_velocities.png", dpi=300)
-        # # plt.show()
-        # plt.close()
+
+        # make a new figure that is a 2D heatmap of the output[-1]
+        OUTS = np.array(OUTS)
+        # save the output to a file
+        np.save(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/outputs.npy", OUTS)
+        # get the yaw rates
+        yaw = OUTS[:, -1]
+        # if not 1D, reshape to 1D
+        if len(yaw.shape) > 1:
+            yaw = yaw.reshape(-1)
+        # reshape to square by getting sqrt
+        n = int(np.sqrt(yaw.shape[0]))
+        yaw = yaw.reshape(n, n)
+        # plot the heatmap
+        plt.imshow(yaw, cmap='viridis')
+        plt.colorbar()
+        # set max min to [-0.15, 0.15]
+        plt.clim(-0.15, 0.15)
+        plt.title("Yaw Rates")
+        plt.savefig(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/yaw_rates.png", dpi=300)
+        plt.close()
+
+        # do the same for the vz values
+        vzs = OUTS[:, 2]
+        # if not 1D, reshape to 1D
+        if len(vzs.shape) > 1:
+            vzs = vzs.reshape(-1)
+        # reshape to square by getting sqrt
+        n = int(np.sqrt(vzs.shape[0]))
+        vzs = vzs.reshape(n, n)
+        # plot the heatmap
+        plt.imshow(vzs, cmap='viridis')
+        plt.colorbar()
+        # set max min to [-0.15, 0.15]
+        plt.clim(-0.08, 0.08)
+        plt.title("Vz velocities")
+        plt.savefig(f"results/{text}_{LAYERS[layer]}_{CLUSTEZ}/vz_velocities.png", dpi=300)
+        plt.close()

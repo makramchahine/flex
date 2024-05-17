@@ -53,6 +53,3 @@ callbacks:
 # otherwise will cause "RuntimeError: unable to open shared memory object </torch_xxx> in read-write mode"
 # reference: https://github.com/facebookresearch/maskrcnn-benchmark/issues/103#issuecomment-785815218
 pytorch_sharing_strategy: file_system
-
-# ckpt_path:
-#  - /home/makramchahine/repos/fm_flight/local/train_flight/2024-03-15/18-53-54/checkpoints/step_400000.ckpt
