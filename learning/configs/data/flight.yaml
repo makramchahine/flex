@@ -1,0 +1,24 @@
+_target_: src.data.flight_datamodule.FlightDataModule
+
+train_data_path:
+  - ${paths.data_dir}/train
+
+eval_data_path:
+  - ${paths.data_dir}/eval
+
+mode: IL
+buffer_size: 1000
+snippet_size: 100
+
+use_roi: true
+use_standardize: true
+use_clip_preprocess: false
+use_lavis_preprocess: false
+lavis_preprocess_cfg: null
+
+use_rejection_sampling: true
+
+batch_size: 1
+num_workers: 0
+pin_memory: False
+persistent_workers: true # avoid reinstantiate vista simulator

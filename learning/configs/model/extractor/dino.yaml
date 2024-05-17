@@ -1,0 +1,13 @@
+_target_: src.models.components.extractors.dino.DINOExtractor
+use_sam: false
+freeze_sam: true
+dino_strides: 4
+desired_height: 45 # 200 # 6
+desired_width: 155 # 320 # 20
+use_16bit: false
+use_traced_model: false
+freeze_dino: true
+last_linear_layer: [384, 64]
+dino_version: in_house
+model_type: dino_vits8
+hub_dir: facebookresearch/dino:main

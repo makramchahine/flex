@@ -1,0 +1,19 @@
+_target_: src.models.components.extractors.clip.CLIPExtractor
+name: ViT-B/32
+jit: false
+download_root: ${paths.pretrained_clip_dir}
+freeze_clip: true
+last_linear_layer: [512, 64]
+use_per_pixel_feature_with_sam: false
+segmentor: fastsam
+segmentor_ckpt: ${paths.pretrained_sam_dir}/FastSAM-x.pt
+fastsam_imgsz: 224
+fastsam_iou: 0.7 # 0.7/0.8/0.9
+fastsam_conf: 0.25 # 0.25/0.3/0.4
+sam_sort_by: area
+spatial_subsample_size: [32, 32] # subsample in spatial dimension otherwise policy need to process a very large feature map
+use_visual_encoder_only: false
+fastsam_min_area_size: 100
+aggregate_by_avg_features: false # use min when set to false
+fastsam_fill_missing_masks: false # seems important in higher-res images
+roi_method: crop # crop | masked | crop_masked

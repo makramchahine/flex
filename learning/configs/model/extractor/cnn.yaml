@@ -1,0 +1,12 @@
+_target_: src.models.components.extractors.cnn.CNNExtractor
+conv_cfg: [[ 3, 24, 5, 2, 2],
+            [24, 36, 5, 2, 2],
+            [36, 48, 3, 2, 1],
+            [48, 64, 3, 1, 1],
+            [64, 64, 3, 1, 1]]
+norm_cfg:
+  type: gn
+  group_size: 16
+act_cfg:
+  type: relu
+  inplace: true

@@ -1,0 +1,14 @@
+_target_: src.models.components.policies.transformer.TransformerPolicy
+model_type: ViT
+cfg:
+  image_size: [6, 20]
+  patch_size: [1, 1]
+  num_classes: 4
+  dim: 128
+  depth: 3
+  heads: 4
+  mlp_dim: 256
+  dropout: 0.1
+  emb_dropout: 0.1
+  channels: 64 # should be consistent with the feature extractor
+  dim_head: 32

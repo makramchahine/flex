@@ -1,0 +1,473 @@
+CONFIG
+├── data
+│   └── _target_: src.data.vista_datamodule.VistaDataModule                                                                                                                        
+│       train_trace_paths:                                                                                                                                                         
+│       - ../../../data/vista/traces//20210609-122400_lexus_devens_outerloop_reverse                                                                                               
+│       - ../../../data/vista/traces//20210609-123703_lexus_devens_outerloop                                                                                                       
+│       - ../../../data/vista/traces//20210609-154745_lexus_devens_outerloop_reverse                                                                                               
+│       - ../../../data/vista/traces//20210609-155238_lexus_devens_outerloop                                                                                                       
+│       - ../../../data/vista/traces//20210609-175037_lexus_devens_outerloop_reverse                                                                                               
+│       - ../../../data/vista/traces//20210609-175503_lexus_devens_outerloop                                                                                                       
+│       - ../../../data/vista/traces//20210613-171636_lexus_devens_outerloop                                                                                                       
+│       - ../../../data/vista/traces//20210613-172102_lexus_devens_outerloop_reverse                                                                                               
+│       - ../../../data/vista/traces//20210726-131322_lexus_devens_center                                                                                                          
+│       - ../../../data/vista/traces//20210726-131912_lexus_devens_center_reverse                                                                                                  
+│       - ../../../data/vista/traces//20210726-154641_lexus_devens_center                                                                                                          
+│       - ../../../data/vista/traces//20210726-155941_lexus_devens_center_reverse                                                                                                  
+│       - ../../../data/vista/traces//20210726-184624_lexus_devens_center                                                                                                          
+│       - ../../../data/vista/traces//20210726-184956_lexus_devens_center_reverse                                                                                                  
+│       eval_trace_paths:                                                                                                                                                          
+│       - ../../../data/vista/traces//20210527-131252_lexus_devens_center_outerloop                                                                                                
+│       - ../../../data/vista/traces//20210527-131709_lexus_devens_center_outerloop_reverse                                                                                        
+│       trace_config:                                                                                                                                                              
+│         road_width: 6                                                                                                                                                            
+│         reset_mode: default                                                                                                                                                      
+│         master_sensor: camera_front                                                                                                                                              
+│       car_config:                                                                                                                                                                
+│         length: 5.0                                                                                                                                                              
+│         width: 2.0                                                                                                                                                               
+│         wheel_base: 2.78                                                                                                                                                         
+│         steering_ratio: 14.7                                                                                                                                                     
+│         lookahead_road: true                                                                                                                                                     
+│         dynamics: curvilinear                                                                                                                                                    
+│         road_buffer_size: 100000.0                                                                                                                                               
+│       camera_config:                                                                                                                                                             
+│         type: camera                                                                                                                                                             
+│         name: camera_front                                                                                                                                                       
+│         size:                                                                                                                                                                    
+│         - 200                                                                                                                                                                    
+│         - 320                                                                                                                                                                    
+│         depth_mode: FIXED_PLANE                                                                                                                                                  
+│         use_lighting: false                                                                                                                                                      
+│       reset_config:                                                                                                                                                              
+│         x_perturbation:                                                                                                                                                          
+│         - -1.0                                                                                                                                                                   
+│         - 1.0                                                                                                                                                                    
+│         yaw_perturbation:                                                                                                                                                        
+│         - -0.04                                                                                                                                                                  
+│         - 0.04                                                                                                                                                                   
+│       privileged_control_config:                                                                                                                                                 
+│         type: CBF                                                                                                                                                                
+│         p_oa:                                                                                                                                                                    
+│         - 2.0                                                                                                                                                                    
+│         - 1                                                                                                                                                                      
+│         use_lane_following_cbf: true                                                                                                                                             
+│         p_lf:                                                                                                                                                                    
+│         - 1.0                                                                                                                                                                    
+│         - 1.0                                                                                                                                                                    
+│         lf_cbf_threshold: 2                                                                                                                                                      
+│         use_lane_following_clf: true                                                                                                                                             
+│         lf_clf_params:                                                                                                                                                           
+│         - 1.0                                                                                                                                                                    
+│         - 1.0                                                                                                                                                                    
+│         - 10.0                                                                                                                                                                   
+│         - 10.0                                                                                                                                                                   
+│         use_desired_speed_clf: true                                                                                                                                              
+│         ds_clf_params:                                                                                                                                                           
+│         - 10                                                                                                                                                                     
+│         - 8                                                                                                                                                                      
+│         - 0                                                                                                                                                                      
+│       task_config:                                                                                                                                                               
+│         n_agents: 2                                                                                                                                                              
+│         mesh_dir: ../../../data/vista/traces//../carpack01                                                                                                                       
+│         init_dist_range:                                                                                                                                                         
+│         - 10.0                                                                                                                                                                   
+│         - 20.0                                                                                                                                                                   
+│         init_lat_noise_range:                                                                                                                                                    
+│         - 1.5                                                                                                                                                                    
+│         - 3.0                                                                                                                                                                    
+│       mode: GPL-Obstacle-Avoidance                                                                                                                                               
+│       buffer_size: 1000                                                                                                                                                          
+│       snippet_size: 200                                                                                                                                                          
+│       use_roi: false                                                                                                                                                             
+│       use_standardize: false                                                                                                                                                     
+│       use_clip_preprocess: false                                                                                                                                                 
+│       use_lavis_preprocess: true                                                                                                                                                 
+│       lavis_preprocess_cfg:                                                                                                                                                      
+│         name: BlipImageEvalProcessor                                                                                                                                             
+│       use_rejection_sampling: true                                                                                                                                               
+│       batch_size: 1                                                                                                                                                              
+│       num_workers: 8                                                                                                                                                             
+│       pin_memory: false                                                                                                                                                          
+│       persistent_workers: true                                                                                                                                                   
+│                                                                                                                                                                                  
+├── model
+│   └── net:                                                                                                                                                                       
+│         extractor:                                                                                                                                                               
+│           _target_: src.models.components.extractors.blip.BLIPExtractor                                                                                                          
+│           name: blip2_feature_extractor                                                                                                                                          
+│           model_type: pretrain                                                                                                                                                   
+│           freeze_blip: true                                                                                                                                                      
+│           use_low_dim_feature: true                                                                                                                                              
+│           use_visual_encoder_only: false                                                                                                                                         
+│           last_linear_layer:                                                                                                                                                     
+│           - 256                                                                                                                                                                  
+│           - 64                                                                                                                                                                   
+│           checkpoint: /home/tsunw/mnt/robosim/workspace/fm_driving/learning/../dino_sam_feature_extraction//hub/checkpoints/blip2_pretrained.pth                                 
+│           use_masked_patch_wise_feature: true                                                                                                                                    
+│         policy:                                                                                                                                                                  
+│           _target_: src.models.components.policies.transformer.TransformerPolicy                                                                                                 
+│           model_type: SimpleViT                                                                                                                                                  
+│           cfg:                                                                                                                                                                   
+│             image_size:                                                                                                                                                          
+│             - 16                                                                                                                                                                 
+│             - 16                                                                                                                                                                 
+│             patch_size:                                                                                                                                                          
+│             - 1                                                                                                                                                                  
+│             - 1                                                                                                                                                                  
+│             num_classes: 2                                                                                                                                                       
+│             dim: 128                                                                                                                                                             
+│             depth: 3                                                                                                                                                             
+│             heads: 4                                                                                                                                                             
+│             mlp_dim: 256                                                                                                                                                         
+│             channels: 64                                                                                                                                                         
+│             dim_head: 32                                                                                                                                                         
+│         _target_: src.models.components.e2e_net.E2ENet                                                                                                                           
+│         output_names:                                                                                                                                                            
+│         - curvature                                                                                                                                                              
+│         - speed                                                                                                                                                                  
+│       _target_: src.models.vista_module.VistaLitModule                                                                                                                           
+│       optimizer:                                                                                                                                                                 
+│         _target_: torch.optim.Adam                                                                                                                                               
+│         _partial_: true                                                                                                                                                          
+│         lr: 0.0001                                                                                                                                                               
+│         weight_decay: 0.0                                                                                                                                                        
+│       scheduler:                                                                                                                                                                 
+│         _target_: torch.optim.lr_scheduler.ReduceLROnPlateau                                                                                                                     
+│         _partial_: true                                                                                                                                                          
+│         mode: min                                                                                                                                                                
+│         factor: 0.1                                                                                                                                                              
+│         patience: 10                                                                                                                                                             
+│       criterion:                                                                                                                                                                 
+│         _target_: src.models.components.criterion.MSECriterion                                                                                                                   
+│         weights:                                                                                                                                                                 
+│           curvature: 10000.0                                                                                                                                                     
+│           speed: 0                                                                                                                                                               
+│         reduction: mean                                                                                                                                                          
+│       closed_loop_eval_cfg:                                                                                                                                                      
+│         max_steps: 200                                                                                                                                                           
+│         n_episodes: 100                                                                                                                                                          
+│       in_distribution_env:                                                                                                                                                       
+│         cls: vista.tasks.multi_agent_base.MultiAgentBase                                                                                                                         
+│         trace_paths:                                                                                                                                                             
+│         - ../../../data/vista/traces//20210527-131252_lexus_devens_center_outerloop                                                                                              
+│         - ../../../data/vista/traces//20210527-131709_lexus_devens_center_outerloop_reverse                                                                                      
+│         - ../../../data/vista/traces//20210609-122400_lexus_devens_outerloop_reverse                                                                                             
+│         - ../../../data/vista/traces//20210609-133320_lexus_devens_outerloop                                                                                                     
+│         trace_config:                                                                                                                                                            
+│           road_width: 6                                                                                                                                                          
+│           reset_mode: default                                                                                                                                                    
+│           master_sensor: camera_front                                                                                                                                            
+│         car_config:                                                                                                                                                              
+│           length: 5.0                                                                                                                                                            
+│           width: 2.0                                                                                                                                                             
+│           wheel_base: 2.78                                                                                                                                                       
+│           steering_ratio: 14.7                                                                                                                                                   
+│           lookahead_road: true                                                                                                                                                   
+│           dynamics: curvilinear                                                                                                                                                  
+│           road_buffer_size: 100000.0                                                                                                                                             
+│         sensors_configs:                                                                                                                                                         
+│         - - type: camera                                                                                                                                                         
+│             name: camera_front                                                                                                                                                   
+│             size:                                                                                                                                                                
+│             - 200                                                                                                                                                                
+│             - 320                                                                                                                                                                
+│             depth_mode: FIXED_PLANE                                                                                                                                              
+│             use_lighting: false                                                                                                                                                  
+│         - []                                                                                                                                                                     
+│         logging_level: ERROR                                                                                                                                                     
+│         car_configs:                                                                                                                                                             
+│         - length: 5.0                                                                                                                                                            
+│           width: 2.0                                                                                                                                                             
+│           wheel_base: 2.78                                                                                                                                                       
+│           steering_ratio: 14.7                                                                                                                                                   
+│           lookahead_road: true                                                                                                                                                   
+│           dynamics: curvilinear                                                                                                                                                  
+│           road_buffer_size: 100000.0                                                                                                                                             
+│         - length: 5.0                                                                                                                                                            
+│           width: 2.0                                                                                                                                                             
+│           wheel_base: 2.78                                                                                                                                                       
+│           steering_ratio: 14.7                                                                                                                                                   
+│           lookahead_road: true                                                                                                                                                   
+│           dynamics: curvilinear                                                                                                                                                  
+│           road_buffer_size: 100000.0                                                                                                                                             
+│         task_config:                                                                                                                                                             
+│           n_agents: 2                                                                                                                                                            
+│           mesh_dir: ../../../data/vista/traces//../carpack01                                                                                                                     
+│           init_dist_range:                                                                                                                                                       
+│           - 10.0                                                                                                                                                                 
+│           - 20.0                                                                                                                                                                 
+│           init_lat_noise_range:                                                                                                                                                  
+│           - 1.5                                                                                                                                                                  
+│           - 3.0                                                                                                                                                                  
+│       out_of_distribution_env:                                                                                                                                                   
+│         cls: vista.tasks.multi_agent_base.MultiAgentBase                                                                                                                         
+│         trace_paths:                                                                                                                                                             
+│         - ../../../data/vista/traces//20211114-145502_lexus_devens_outerloop_reverse                                                                                             
+│         - ../../../data/vista/traces//20220216-135405_lexus_devens_outerloop                                                                                                     
+│         - ../../../data/vista/traces//20220216-135405_lexus_devens_outerloop                                                                                                     
+│         - ../../../data/vista/traces//20220216-135740_lexus_devens_outerloop_reverse                                                                                             
+│         - ../../../data/vista/traces//20220216-165240_lexus_devens_outerloop_reverse                                                                                             
+│         - ../../../data/vista/traces//20220216-165939_lexus_devens_outerloop                                                                                                     
+│         - ../../../data/vista/traces//20220221-122822_lexus_devens_outerloop                                                                                                     
+│         - ../../../data/vista/traces//20220221-123214_lexus_devens_outerloop_reverse                                                                                             
+│         - ../../../data/vista/traces//20220221-143842_lexus_devens_outerloop                                                                                                     
+│         - ../../../data/vista/traces//20220221-144755_lexus_devens_outerloop_reverse                                                                                             
+│         - ../../../data/vista/traces//20220221-170847_lexus_devens_outerloop                                                                                                     
+│         - ../../../data/vista/traces//20220221-171456_lexus_devens_outerloop_reverse                                                                                             
+│         trace_config:                                                                                                                                                            
+│           road_width: 6                                                                                                                                                          
+│           reset_mode: default                                                                                                                                                    
+│           master_sensor: camera_front                                                                                                                                            
+│         car_config:                                                                                                                                                              
+│           length: 5.0                                                                                                                                                            
+│           width: 2.0                                                                                                                                                             
+│           wheel_base: 2.78                                                                                                                                                       
+│           steering_ratio: 14.7                                                                                                                                                   
+│           lookahead_road: true                                                                                                                                                   
+│           dynamics: curvilinear                                                                                                                                                  
+│           road_buffer_size: 100000.0                                                                                                                                             
+│         sensors_configs:                                                                                                                                                         
+│         - - type: camera                                                                                                                                                         
+│             name: camera_front                                                                                                                                                   
+│             size:                                                                                                                                                                
+│             - 200                                                                                                                                                                
+│             - 320                                                                                                                                                                
+│             depth_mode: FIXED_PLANE                                                                                                                                              
+│             use_lighting: false                                                                                                                                                  
+│         - []                                                                                                                                                                     
+│         logging_level: ERROR                                                                                                                                                     
+│         car_configs:                                                                                                                                                             
+│         - length: 5.0                                                                                                                                                            
+│           width: 2.0                                                                                                                                                             
+│           wheel_base: 2.78                                                                                                                                                       
+│           steering_ratio: 14.7                                                                                                                                                   
+│           lookahead_road: true                                                                                                                                                   
+│           dynamics: curvilinear                                                                                                                                                  
+│           road_buffer_size: 100000.0                                                                                                                                             
+│         - length: 5.0                                                                                                                                                            
+│           width: 2.0                                                                                                                                                             
+│           wheel_base: 2.78                                                                                                                                                       
+│           steering_ratio: 14.7                                                                                                                                                   
+│           lookahead_road: true                                                                                                                                                   
+│           dynamics: curvilinear                                                                                                                                                  
+│           road_buffer_size: 100000.0                                                                                                                                             
+│         task_config:                                                                                                                                                             
+│           n_agents: 2                                                                                                                                                            
+│           mesh_dir: ../../../data/vista/traces//../carpack01                                                                                                                     
+│           from_objaverse: true                                                                                                                                                   
+│           objaverse_uids:                                                                                                                                                        
+│           - 0bcbc7f6470e4ec39b6bfb40a97f014f                                                                                                                                     
+│           - 1fa609c96edd44c7a80ad56f1ef590bd                                                                                                                                     
+│           - 2b46e077b12b41cd96b6c57f8f54be89                                                                                                                                     
+│           - 2b509d1bce104224b147c81757f6f43a                                                                                                                                     
+│           - 03a45d6d62a94ed9bfd308e2ac96cca3                                                                                                                                     
+│           - 3e5f3f637aaf49b6b028d2c5d7581b60                                                                                                                                     
+│           - 3f521cf2d2204bd095c4fce86c384846                                                                                                                                     
+│           - 57c58f9a74d543249831a4d7b3a5cac6                                                                                                                                     
+│           - 98fa744560df458891f673a55a7f00af                                                                                                                                     
+│           - 898e9be8c8964f6298188a2901216e80                                                                                                                                     
+│           - 9540ab3579ef46c5a81128f64f07f058                                                                                                                                     
+│           - 400765959a2546caab107944df9db583                                                                                                                                     
+│           - d35ff630df614771b82e7b2f59035b1e                                                                                                                                     
+│           - 03ce973192634d1f8d5ac3880e532f91                                                                                                                                     
+│           - 12c336887d8d4abd908a464fc656cdfd                                                                                                                                     
+│           - 12c336887d8d4abd908a464fc656cdfd                                                                                                                                     
+│           - 016e93bac3c94a9fa78caf9630553b6b                                                                                                                                     
+│           - 049e3a83b8274225b06b0d5b054c0101                                                                                                                                     
+│           - 67c018719fd2477291279a0df27b1944                                                                                                                                     
+│           - f6bd1718cee24467a85b221f1a876dd8                                                                                                                                     
+│           - f8024595e11c48119877c9c7cc554abc                                                                                                                                     
+│           - 1f23c05032164ab9b0c520ece4cf9a5a                                                                                                                                     
+│           - 5a3d99e5c2bb4a99b0b0e4f4cdfa4384                                                                                                                                     
+│           init_dist_range:                                                                                                                                                       
+│           - 10.0                                                                                                                                                                 
+│           - 20.0                                                                                                                                                                 
+│           init_lat_noise_range:                                                                                                                                                  
+│           - 1.5                                                                                                                                                                  
+│           - 3.0                                                                                                                                                                  
+│                                                                                                                                                                                  
+├── callbacks
+│   └── model_checkpoint:                                                                                                                                                          
+│         _target_: lightning.pytorch.callbacks.ModelCheckpoint                                                                                                                    
+│         dirpath: /home/tsunw/mnt/robosim/workspace/fm_driving/learning/checkpoints                                                                                               
+│         filename: step_{step:06d}                                                                                                                                                
+│         monitor: null                                                                                                                                                            
+│         verbose: false                                                                                                                                                           
+│         save_last: true                                                                                                                                                          
+│         save_top_k: -1                                                                                                                                                           
+│         mode: min                                                                                                                                                                
+│         auto_insert_metric_name: false                                                                                                                                           
+│         save_weights_only: false                                                                                                                                                 
+│         every_n_train_steps: 100000                                                                                                                                              
+│         train_time_interval: null                                                                                                                                                
+│         every_n_epochs: null                                                                                                                                                     
+│         save_on_train_epoch_end: null                                                                                                                                            
+│       model_summary:                                                                                                                                                             
+│         _target_: lightning.pytorch.callbacks.RichModelSummary                                                                                                                   
+│         max_depth: -1                                                                                                                                                            
+│       rich_progress_bar:                                                                                                                                                         
+│         _target_: lightning.pytorch.callbacks.RichProgressBar                                                                                                                    
+│       early_stopping:                                                                                                                                                            
+│         monitor: val/acc                                                                                                                                                         
+│         patience: 100                                                                                                                                                            
+│         mode: max                                                                                                                                                                
+│       backbone_finetuning:                                                                                                                                                       
+│         _target_: lightning.pytorch.callbacks.BackboneFinetuning                                                                                                                 
+│         unfreeze_backbone_at_epoch: 9999                                                                                                                                         
+│         train_bn: false                                                                                                                                                          
+│                                                                                                                                                                                  
+├── logger
+│   └── csv:                                                                                                                                                                       
+│         _target_: lightning.pytorch.loggers.csv_logs.CSVLogger                                                                                                                   
+│         save_dir: /home/tsunw/mnt/robosim/workspace/fm_driving/learning                                                                                                          
+│         name: csv/                                                                                                                                                               
+│         prefix: ''                                                                                                                                                               
+│       tensorboard:                                                                                                                                                               
+│         _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger                                                                                                        
+│         save_dir: /home/tsunw/mnt/robosim/workspace/fm_driving/learning/tensorboard/                                                                                             
+│         name: null                                                                                                                                                               
+│         log_graph: false                                                                                                                                                         
+│         default_hp_metric: true                                                                                                                                                  
+│         prefix: ''                                                                                                                                                               
+│                                                                                                                                                                                  
+├── trainer
+│   └── _target_: lightning.pytorch.trainer.Trainer                                                                                                                                
+│       default_root_dir: /home/tsunw/mnt/robosim/workspace/fm_driving/learning                                                                                                    
+│       min_epochs: 1                                                                                                                                                              
+│       max_epochs: 1                                                                                                                                                              
+│       accelerator: gpu                                                                                                                                                           
+│       devices: 1                                                                                                                                                                 
+│       check_val_every_n_epoch: 1                                                                                                                                                 
+│       deterministic: false                                                                                                                                                       
+│       max_steps: 1000000.0                                                                                                                                                       
+│       limit_val_batches: 10                                                                                                                                                      
+│       val_check_interval: 50000                                                                                                                                                  
+│       strategy: ddp_spawn                                                                                                                                                        
+│                                                                                                                                                                                  
+├── paths
+│   └── root_dir: /home/tsunw/mnt/robosim/workspace/fm_driving/learning                                                                                                            
+│       data_dir: ../../../data/vista/traces/                                                                                                                                      
+│       log_dir: ../local                                                                                                                                                          
+│       pretrained_clip_dir: ../local/pretrained_ckpt                                                                                                                              
+│       pretrained_blip_dir: /home/tsunw/mnt/robosim/workspace/fm_driving/learning/../dino_sam_feature_extraction//hub/checkpoints                                                 
+│       pretrained_sam_dir: ../local/pretrained_ckpt                                                                                                                               
+│       output_dir: /home/tsunw/mnt/robosim/workspace/fm_driving/learning                                                                                                          
+│       work_dir: /home/tsunw/mnt/robosim/workspace/fm_driving/learning                                                                                                            
+│                                                                                                                                                                                  
+├── extras
+│   └── ignore_warnings: false                                                                                                                                                     
+│       enforce_tags: true                                                                                                                                                         
+│       print_config: true                                                                                                                                                         
+│                                                                                                                                                                                  
+├── task_name
+│   └── None                                                                                                                                                                       
+├── tags
+│   └── ['vista']                                                                                                                                                                  
+├── train
+│   └── True                                                                                                                                                                       
+├── test
+│   └── False                                                                                                                                                                      
+├── compile
+│   └── False                                                                                                                                                                      
+├── ckpt_path
+│   └── ../local/train_vista_gpl/2023-07-26/12-55-21/checkpoints/last.ckpt                                                                                                         
+├── seed
+│   └── 42                                                                                                                                                                         
+├── profiler
+│   └── simple                                                                                                                                                                     
+├── pytorch_sharing_strategy
+│   └── file_system                                                                                                                                                                
+└── saved_features_path
+    └── ./outputs/2023-08-21/19-17-59/feats.pkl                                                                                                                                    
+Dataset size: 1953
+Relevant concepts: ['HOV lanes' 'Forests and jungles' 'Cul-de-sacs/dead ends'
+ 'Fire (forest fires)' 'Car washes' 'Earthquakes (effects on the road)'
+ 'Sun' 'Trees' 'Campgrounds' 'Cars' 'Snow and ice'
+ 'Roadside inns and motels' 'Viewpoints/scenic overlooks'
+ 'Reflective road studs ("cat\'s eyes")' 'Speed cameras'
+ 'Parks and playgrounds' 'Car dealerships'
+ 'Tornadoes and hurricanes (extreme cases)' 'Wetlands and swamps'
+ 'Lightning and thunderstorms' 'Clouds' 'Animal dens and nests'
+ 'Speed bumps' 'Cemeteries' 'Community centers'
+ 'Aurora borealis/aurora australis (in specific locations)' 'Road flares'
+ 'Mudslides' 'Moon and stars' 'Hitchhikers' 'Grass' 'Farm equipment'
+ 'Emergency vehicles (police, fire, ambulance)' 'Rain' 'Courthouses'
+ 'Art galleries' 'Movie theaters' 'Mailboxes' 'Auto repair shops'
+ 'Port facilities (cargo, cruise ships)' 'Rivers and lakes' 'Fog'
+ 'Swimming pools' 'Foliage in autumn' 'Trash cans' 'Hail'
+ '"Slippery When Wet" signs' 'Police stations'
+ 'Road signs (speed limit, directions)' 'Historic landmarks' 'Deer'
+ 'Passing lanes' '"Falling Rocks" signs'
+ 'Seashells and marine life (on coastal roads)'
+ '"Welcome to [City/Town]" signs' 'Hostels' 'Industrial equipment'
+ 'Construction workers' 'Grain silos' 'Farmland and fields' 'Trailers'
+ 'Outlet malls' 'Asphalt' 'Rainbows' 'Golf courses' 'Concert halls'
+ 'Animal tracks' 'Plantations (e.g., vineyards, orchards)' 'Museums'
+ 'Military bases' 'Bed and Breakfasts' 'Road arrows for direction'
+ 'Wildflowers and flowering plants' 'Potholes' 'Vineyards and wineries'
+ 'Cacti' 'Trucks' 'Squirrels' 'Wind' 'Bowling alleys'
+ 'National and state border checkpoints' 'Icebergs (in polar regions)'
+ 'Adventure sports centers (e.g., rafting, skydiving)'
+ 'Wild berries and fruits' 'Cats' 'Overpasses and underpasses'
+ 'Construction zones' 'Driveways' 'Cattle guards' 'Boulders and stones'
+ 'Power lines' 'Factories' 'Train tracks and trains' 'City halls'
+ 'Thermal vents (in volcanic areas)' 'Spring blossoms' 'Botanical gardens'
+ 'Benches' 'Zoos and aquariums' 'Roadside diners' 'Canyons' 'School zones'
+ 'Insects (flies, mosquitoes)' 'Schools and school buses' 'Banks' 'Birds'
+ 'Stadiums and arenas' 'Radio and TV stations' 'Fire stations' 'RVs'
+ 'Water towers' 'Volcanoes' 'Veterinary clinics'
+ 'Lighthouses (coastal areas)' 'Petrol storage tanks'
+ 'Electric vehicle charging stations' 'Street lamps' 'Moss and lichen'
+ 'Wind turbines' 'Gas stations' 'Fences and walls' 'Police officers'
+ 'Mountains' 'Public art and statues' 'Orchards' 'Deserts' 'Marshes'
+ 'Divided highways' 'Motorcycles' 'Sand dunes' 'Casinos'
+ 'Helipads and small airstrips' 'Beaches and oceans'
+ 'Fish (in rivers, ponds, etc.)'
+ 'Roadside attractions (e.g., "World\'s Largest...")' 'Tourists'
+ 'Billboards' 'Shopping centers' 'Joggers' 'Solar panels'
+ 'Kiosks and newsstands' '"Watch for Animals" signs' 'Vending machines'
+ 'Mile markers' 'Spa and wellness centers' 'Convention centers'
+ 'Government buildings' 'Surf shops' 'Farm animals (cows, sheep)' 'Dogs'
+ 'Lane markings' 'Breweries and distilleries' 'Caves' 'Tunnels' 'Hills'
+ 'Merge lanes' 'Gyms and fitness centers' 'Train crossings' 'Skate parks'
+ 'Monasteries and convents' 'Beach facilities (showers, lifeguard towers)'
+ 'Geysers and hot springs' 'Timezone markers'
+ 'Coral reefs (if near coastal roads)' 'Ambulance stations'
+ 'Marinas and docks' 'Roundabouts' 'Recycling centers'
+ 'Hang gliding and paragliding launch sites' 'Airports and planes'
+ 'Restaurants and cafes' 'Historical markers' 'Hospitals'
+ 'Rental shops (bikes, scooters, boats)' 'Zebra crossings'
+ 'Observation towers' 'Libraries' 'Children playing' 'Dive shops'
+ 'Exit ramps' 'Boats (if near water)' 'Rest areas' 'Fairgrounds'
+ 'Intersections' 'Guardrails' 'One-way street signs' 'Post offices'
+ 'Ferry crossings' 'Waterfalls' 'Warehouses' 'Bicycle lanes' 'Food trucks'
+ 'Fire hydrants' 'Traffic lights' 'Flea markets'
+ 'Universities and colleges' 'Amusement parks' 'Bicycles'
+ 'Public restrooms' 'Subway stations' 'Churches, mosques, temples'
+ 'Lagoons and estuaries' 'Street performers' 'Emergency call boxes'
+ 'Traffic cones' 'Stop signs' 'Boarding schools' "Farmer's markets"
+ 'Pedestrian crosswalks' 'Automated teller machines (ATMs)' 'Detours'
+ 'Parking meters' 'Parking lots' 'Bus terminals' 'Bridges' 'Buses'
+ 'Yield signs' 'Rock formations' '"No Parking" signs' 'Toll booths'
+ 'Barricades' 'Bus stops' 'Cliffs' 'Street vendors' 'Fishing piers'
+ 'Pedestrians']
+Bincount: [65044 37322 27730 21141 20778 20527 18747 15514 14722 12496 11291 10198
+  9625  7599  7489  7329  7208  6749  6249  5476  5459  5179  5060  4959
+  4853  4408  4243  3948  3472  3451  3400  3064  3034  2968  2954  2896
+  2843  2811  2526  2433  2417  2384  2275  2205  1997  1973  1969  1944
+  1936  1854  1854  1824  1815  1784  1775  1683  1615  1613  1577  1557
+  1482  1481  1436  1433  1389  1367  1318  1307  1293  1268  1251  1225
+  1213  1204  1176  1068  1016   931   917   913   819   790   789   784
+   765   742   727   719   656   636   605   600   594   594   574   574
+   528   513   508   505   503   462   461   428   427   425   421   412
+   389   358   353   352   348   342   342   340   335   329   319   317
+   306   297   282   278   274   265   261   259   252   252   245   243
+   227   226   204   197   193   193   185   182   177   170   163   163
+   155   142   141   125   125   122   122   122   122   118   114   112
+   107   106   105   103    97    95    80    79    74    72    72    70
+    68    67    61    58    51    48    43    40    38    37    37    35
+    33    33    31    30    29    29    29    28    28    27    26    25
+    23    21    21    20    20    20    18    16    16    15    15    14
+    13     9     8     8     7     7     7     6     6     6     6     6
+     6     5     5     4     4     3     3     2     2     2]

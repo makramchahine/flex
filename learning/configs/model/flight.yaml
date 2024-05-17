@@ -1,0 +1,36 @@
+_target_: src.models.flight_module.FlightLitModule
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.001
+  weight_decay: 0.0
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _partial_: true
+  mode: min
+  factor: 0.1
+  patience: 10
+
+net:
+  _target_: src.models.components.e2e_net.E2ENet
+  output_names: [vx, vy, vz, yaw]
+
+criterion:
+  _target_: src.models.components.criterion.MSECriterion
+  weights:
+    vx: 1
+    vy: 1
+    vz: 1
+    yaw: 1
+  reduction: "mean"
+
+closed_loop_eval_cfg:
+  max_steps: 300
+  n_episodes: 1 # NOTE: closed loop eval is run every validation step
+
+
+defaults:
+  - extractor@net.extractor: blip
+  - policy@net.policy: mlp

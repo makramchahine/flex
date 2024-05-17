@@ -1,0 +1,11 @@
+_target_: src.models.components.policies.transformer.TransformerPolicy
+model_type: T2TViT
+cfg:
+  dim: 128
+  image_size: [6, 20]
+  depth: 3
+  heads: 4
+  mlp_dim: 256
+  num_classes: 4
+  channels: 64 # should be consistent with the feature extractor
+  t2t_layers: [[1, 1], [1, 1], [1, 1]]

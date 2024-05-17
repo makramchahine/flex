@@ -1,0 +1,12 @@
+_target_: src.models.components.policies.mlp.MLPPolicy
+reduction_cfg:
+  type: avgpool
+  output_size: [1, 20]
+fc_cfg: [1280, 1000, 100, 4]
+fc_bias: true
+norm_cfg:
+  type: null
+act_cfg:
+  type: relu
+  inplace: true
+dropout_p: 0.3
