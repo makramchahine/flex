@@ -1,0 +1,22 @@
+# Ignore Python cache files and directories
+__pycache__/
+*.pyc
+
+# Ignore all hidden directories (starting with .)
+.*/
+
+# Optionally, you can add other common Python-related ignores
+# Ignore virtual environments
+venv/
+env/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore macOS hidden files
+.DS_Store
+
+# Ignore other system-specific or editor-specific files
+Thumbs.db
+.idea/
+.vscode/
