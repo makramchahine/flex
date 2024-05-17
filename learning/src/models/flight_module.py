@@ -148,44 +148,7 @@ class FlightLitModule(LightningModule):
             envs["out_of_distr"] = self.out_of_distribution_env
 
         for env_name, env in envs.items():
-            metrics = self.closed_loop_metrics[env_name]
-
-            # TODO: obstacle avoidance
-
-            agent_id = env.world.agents[0].id
-            sensor = env.world.agents[0].sensors[0]
-            for ep_i in range(self.closed_loop_eval_cfg.n_episodes):
-                obs = env.reset()
-                ep_rew = 0.
-                for step in range(self.closed_loop_eval_cfg.max_steps + 1):
-                    obs = obs[agent_id]["camera_front"]
-                    model_inp = {
-                        "image": self.closed_loop_eval_transform["image"](img=obs, sensor=sensor, train=False)[None,...].to(self.device),
-                    }
-                    with torch.no_grad():
-                        model_out = self.forward(model_inp)
-
-                    action = {agent_id: [model_out["curvature"].item()]} # NOTE: no speed now
-                    for _a in env.world.agents:
-                        if _a.id not in action.keys():
-                            action[_a.id] = [0., 0.]
-                    obs, rew, done, info = env.step(action, dt=1/30.)
-                    done = any(list(done.values()))
-                    rew = rew[agent_id]
-                    info = info[agent_id]
-
-                    ep_rew += rew
-                    if done:
-                        break
-
-                complete = (step / self.closed_loop_eval_cfg.max_steps) if done else 1.0
-                metrics["steps_traveled"](step)
-                metrics["complete"](complete)
-                metrics["exceed_max_rot"](info.get("exceed_max_rot", None))
-                metrics["out_of_lane"](info.get("out_of_lane", None))
-                metrics["crashed"](info.get("crashed", None))
-
-            self.log_dict(metrics, on_step=True)
+            NotImplementedError("Closed loop evaluation is not implemented yet!")
 
     def _log_loss_tracker(self, loss_tracker, losses):
         for key in self.criterion.names:

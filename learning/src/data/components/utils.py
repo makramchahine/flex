@@ -51,7 +51,6 @@ class RejectionSampler:
     
     
 def transform_rgb(img: np.ndarray,
-                  sensor: Camera,
                   train: bool,
                   label: float = None,
                   use_standardize: bool = True,
