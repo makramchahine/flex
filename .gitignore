@@ -20,3 +20,6 @@ env/
 Thumbs.db
 .idea/
 .vscode/
+
+# Ignore the model checkpoints
+models/
