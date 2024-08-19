@@ -3,7 +3,6 @@ name: blip2_feature_extractor
 model_type: pretrain
 freeze_blip: true
 use_low_dim_feature: true
-use_visual_encoder_only: false
 last_linear_layer: [256, 64] # set to 768 if not using low-dimensional feature
 checkpoint: ${paths.pretrained_blip_dir}/blip2_pretrained.pth
 use_continuous_pe: false

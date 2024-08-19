@@ -11,10 +11,7 @@ from lavis.common.registry import registry
 from lavis.models.blip_models.blip_outputs import BlipOutputFeatures
 
 from src.models.components.extractors.base import BaseExtractor
-from src.models.components.net_utils import ImageToTextFeatModel
 from transformers import BertTokenizer
-
-
 
 class BLIPExtractor(BaseExtractor):
     def __init__(
@@ -23,47 +20,35 @@ class BLIPExtractor(BaseExtractor):
         model_type: str,
         freeze_blip: bool,
         use_low_dim_feature: Optional[bool] = True,
-        use_visual_encoder_only: Optional[bool] = False,
         use_masked_patch_wise_feature: Optional[bool] = True,
         append_global_features: Optional[bool] = False,
         last_linear_layer: Optional[List[int]] = None,
         checkpoint: Optional[str] = None,
-        image_to_text_feat_cfg: Optional[OmegaConf] = None,
         use_continuous_pe: Optional[bool] = False,
         stride: Optional[bool] = 14,
     ):
         super().__init__()
 
-        ##### The following code may use internet connection
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
 
+        ##### The following code may use internet connection/ model downloaded to torch hub directory
         model, vis_processors, txt_processors = load_model_and_preprocess(
             name=name,
             model_type=model_type,
             is_eval=True,
             device=device,
-        ) # NOTE: model downloaded to torch hub directory (usually in the dino folder in this repo)
-        ############
-        # model_cls = registry.get_model_class(name)
-        # model_cfg = OmegaConf.load(model_cls.default_config_path(model_type)).model
-        # if checkpoint is not None: # change from a path to google drive to 
-        #     model_cfg.pretrained = checkpoint
-        # # NOTE: the vision transformer is hardcoded in lavis/models/eva_vit.py to load from https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
-        # model = model_cls.from_config(model_cfg)
-        # model = model.float()
+        )
+
         if use_continuous_pe:
             model = patch_vit_resolution(model, stride=stride)
-            self.custom_extract_image_features = self.custom_extract_image_features_ver1
-            self.custom_extract_multi_features = self.custom_extract_multi_features_ver1
+            self.extract_features = self.custom_extract_features
         else:
-            self.custom_extract_image_features = self.custom_extract_image_features_ver0
-            self.custom_extract_multi_features = self.custom_extract_multi_features_ver0
+            self.extract_features = self.custom_extract_features
 
         self.model = model
-
-        # self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+        self.vis_processors = vis_processors
+        self.txt_processors = txt_processors
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.tokenizer.add_special_tokens({"bos_token": "[DEC]"})
@@ -74,7 +59,6 @@ class BLIPExtractor(BaseExtractor):
         self.freeze_blip = freeze_blip
         
         self.use_low_dim_feature = use_low_dim_feature
-        self.use_visual_encoder_only = use_visual_encoder_only
         self.use_masked_patch_wise_feature = use_masked_patch_wise_feature
         self.append_global_features = append_global_features
         self.use_continuous_pe = use_continuous_pe
@@ -87,22 +71,9 @@ class BLIPExtractor(BaseExtractor):
             last_linear_layer = nn.Conv2d(*last_linear_layer, 1, 1, 0, device=self.device)
         self.last_linear_layer = last_linear_layer
         
-        # image to text feature model for cross modality evaluation
-        self.txt_processors = txt_processors
-
-        if image_to_text_feat_cfg is not None:
-            assert self.use_masked_patch_wise_feature, "Image to text model is only implemented with use_masked_patch_wise_feature"
-
-            self.image_to_text_model = ImageToTextFeatModel(
-                extract_text_feat=self.extract_text_feat,
-                **dict(image_to_text_feat_cfg),
-            )
-        else:
-            self.image_to_text_model = None
-
     def forward(self, x):
         super().forward(x)
-        img = x["image"]
+        img, txt = x["image"], x["text"]
 
         device = img.device
 
@@ -110,46 +81,14 @@ class BLIPExtractor(BaseExtractor):
             self.model.eval()
             self.model.to(device)
 
-        if self.use_visual_encoder_only:
+        if self.use_masked_patch_wise_feature:
             if self.freeze_blip:
                 with torch.no_grad():
-                    img_features = self.model.visual_encoder(img)
+                    raw_out = self.extract_features(img, txt)
             else:
-                img_features = self.model.visual_encoder(img)
-            fH, fW = 16, 16 # HACK
-            assert (img_features.shape[1] - 1) == (fH * fW)
-            # NOTE: it should be img_features[:,1:] instead of img_features[:,:-1] as the 0'th dim is class embedding
-            out = img_features[:,:-1].view(img_features.shape[0], fH, fW, img_features.shape[-1])
-            out = out.permute(0, 3, 1, 2)
-        elif self.use_masked_patch_wise_feature:
-            # should all happen in this first if condition 
-            if "text" in x.keys():
-                txt = x["text"]
-                if self.freeze_blip:
-                    with torch.no_grad():
-                        raw_out = self.custom_extract_multi_features(img, txt)
-                else:
-                    raw_out = self.custom_extract_multi_features(img, txt)
-                # print shape of multimodal_embeds
-                # print(raw_out.multimodal_embeds.size())
+                raw_out = self.extract_features(img, txt)
+            features = raw_out.multimodal_embeds[:, 0]
 
-
-                # print(raw_out.multimodal_embeds.shape)
-                img_features = raw_out.multimodal_embeds[:, 0]
-                # print(raw_out.multimodal_embeds.shape)
-                # print(img_features.shape)
-                # print("img feats device", img_features.device)
-
-            # this shouldn't ever occur
-            else:
-                if self.freeze_blip:
-                    with torch.no_grad():
-                        raw_out = self.custom_extract_image_features(img)
-                else:
-                    raw_out = self.custom_extract_image_features(img)
-
-                img_features = raw_out.image_embeds_proj[:, 0] # NOTE: get the first query embedding
-            
             if self.use_continuous_pe:
                 def _to_size(_stride): # HACK
                     if _stride == 14:
@@ -161,34 +100,31 @@ class BLIPExtractor(BaseExtractor):
                 fH, fW = _to_size(self.stride[0]), _to_size(self.stride[1])
             else:
                 fH, fW = 16, 16 # HACK
-            assert (img_features.shape[0] - 1) == (fH * fW)
-            global_img_features = img_features[0]
-            out = img_features[1:].view(1, fH, fW, img_features.shape[-1])
+
+            assert (features.shape[0] - 1) == (fH * fW)
+            global_features = features[0]
+            out = features[1:].view(1, fH, fW, features.shape[-1])
             out = out.permute(0, 3, 1, 2)
             
-            if self.image_to_text_model:
-                # NOTE: not doing the conversion for global image feature
-                out = self.image_to_text_model(out, img_raw=x.get("image_raw", None), model_is_training=self.training)
-                
-            self._intermediate_features = out
-            
             if self.append_global_features:
-                out = torch.cat([out, global_img_features[None, :, None, None].repeat(out.shape[0], 1, out.shape[2], out.shape[3])], dim=1)
-        else:
+                out = torch.cat([out, global_features[None, :, None, None].repeat(out.shape[0], 1, out.shape[2], out.shape[3])], dim=1)
+        
+        else: # embed the entire image without masking patches
+            if isinstance(txt, list):
+                txt = txt[0]
+            text_input = self.txt_processors["eval"](txt)
+            sample = {"image": img, "text_input": [text_input]}
+
             if self.freeze_blip:
                 with torch.no_grad():
-                    features = self.model.extract_features({"image": img}, mode="image")
+                    features = self.model.extract_features(sample, mode="multimodal")
             else:
-                features = self.model.extract_features({"image": img}, mode="image")
+                features = self.model.extract_features(sample, mode="multimodal")
 
-            if self.use_low_dim_feature:
-                img_features = features.image_embeds_proj
-            else:
-                img_features = features.image_embeds
-            out = img_features.permute(0, 2, 1)[..., None] # from (B, 32, x) to (B, x, 32, 1)
+            features = features.multimodal_embeds[:, 0]
+            out = features.view(1, 1, 1, features.shape[-1])
+            out = out.permute(0, 3, 1, 2)
 
-        # set out to cpu at inference (i don't know why)
-        # print("out device", out.device)
         if self.last_linear_layer is not None:
             out = self.last_linear_layer(out)
             
@@ -202,123 +138,7 @@ class BLIPExtractor(BaseExtractor):
     def set_backbone(self, lit_module):
         lit_module.backbone = self.model
 
-    def custom_extract_image_features_ver0(self, image):
-        model = self.model
-
-        with model.maybe_autocast():
-            image_embeds_frozen = model.ln_vision(model.visual_encoder(image))
-            
-        image_embeds_frozen = image_embeds_frozen.float() # (1, 257, 1408)
-        image_atts = torch.ones(
-            image_embeds_frozen.size()[:-1], dtype=torch.long
-        ).to(model.device) # (1, 257)
-        query_tokens = model.query_tokens.expand(
-            image_embeds_frozen.shape[0], -1, -1
-        ) # (1, 32, 768)
-
-        # NOTE: prepare input for leave-one-out patch feature
-        n_patches = 256
-        mode = 1
-        assert image_embeds_frozen.shape[1] == (n_patches + 1)
-        query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1)
-        image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1)
-        image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1)
-        for i in range(1, n_patches + 1):
-            if mode == 0:
-                image_atts_pp[i, :, i-1] = 0
-            elif mode == 1:
-                image_atts_pp[i, :] = 0
-                image_atts_pp[i, :, i-1] = 1 # NOTE: this is buggy
-            else:
-                raise ValueError
-
-        query_output = model.Qformer.bert(
-            query_embeds=query_tokens_pp,
-            encoder_hidden_states=image_embeds_frozen_pp,
-            encoder_attention_mask=image_atts_pp,
-            return_dict=True,
-        )
-        
-        image_embeds = query_output.last_hidden_state
-        
-        if mode == 0:
-            image_embeds[1:] = image_embeds[0:1] - image_embeds[1:]
-            # doing after projection like "image_features[1:] = image_features[0:1] - image_features[1:]" seems much worse
-        elif mode == 1:
-            pass
-        else:
-            raise ValueError
-        
-        image_features = F.normalize(model.vision_proj(image_embeds), dim=-1) # (1, 32, 256)
-    
-        out = BlipOutputFeatures(
-            image_embeds=image_embeds,
-            image_embeds_proj=image_features,
-        ) 
-        
-        return out
-    
-    def custom_extract_image_features_ver1(self, image):
-        model = self.model
-        
-        with model.maybe_autocast():
-            image_embeds_frozen = model.ln_vision(model.visual_encoder(image))
-            
-        image_embeds_frozen = image_embeds_frozen.float() # (1, 257, 1408)
-        image_atts = torch.ones(
-            image_embeds_frozen.size()[:-1], dtype=torch.long
-        ).to(model.device) # (1, 257)
-        query_tokens = model.query_tokens.expand(
-            image_embeds_frozen.shape[0], -1, -1
-        ) # (1, 32, 768)
-
-        # NOTE: prepare input for leave-one-out patch feature
-        n_patches = (1 + (224 - 14) // self.stride[0]) * (1 + (224 - 14) // self.stride[1])
-        mode = 1
-        assert image_embeds_frozen.shape[1] == (n_patches + 1)
-        query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1)
-        image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1)
-        image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1)
-        for i in range(1, n_patches + 1):
-            if mode == 0:
-                image_atts_pp[i, :, i-1] = 0
-            elif mode == 1:
-                image_atts_pp[i, :] = 0
-                # image_atts_pp[i, :, 0] = 1 # this is bad and will get all of the "patches" similar
-                image_atts_pp[i, :, i] = 1
-            else:
-                raise ValueError
-
-        query_output = model.Qformer.bert(
-            query_embeds=query_tokens_pp,
-            encoder_hidden_states=image_embeds_frozen_pp,
-            encoder_attention_mask=image_atts_pp,
-            return_dict=True,
-        )
-        
-        image_embeds = query_output.last_hidden_state
-        
-        if mode == 0:
-            image_embeds[1:] = image_embeds[0:1] - image_embeds[1:]
-            # doing after projection like "image_features[1:] = image_features[0:1] - image_features[1:]" seems much worse
-        elif mode == 1:
-            pass
-        else:
-            raise ValueError
-        
-        image_features = F.normalize(model.vision_proj(image_embeds), dim=-1) # (1, 32, 256)
-    
-        out = BlipOutputFeatures(
-            image_embeds=image_embeds,
-            image_embeds_proj=image_features,
-        ) 
-        
-        return out
-
-########################################################################################################################
-########################################################################################################################
-
-    def custom_extract_multi_features_ver0(self, image, caption):
+    def custom_extract_features(self, image, caption):
         model = self.model
 
         # if caption is wrapped in a list, take the first element
@@ -367,17 +187,6 @@ class BLIPExtractor(BaseExtractor):
             else:
                 raise ValueError
 
-        # print("THE INDIVIDUAL SIZES")
-        # print("query token size " , query_tokens.size())
-        # print("att_mask size " , att_mask.size())
-        # print("image_embeds_frozen size " , image_embeds_frozen.size())
-        # print("image_atts size " , image_atts.size())
-        # print("PER PATCH")
-        # print("query token size pp " , query_tokens_pp.size())
-        # print("att_mask size pp " , att_mask_pp.size())
-        # print("image_embeds_frozen size pp " , image_embeds_frozen_pp.size())
-        # print("image_atts size pp " , image_atts_pp.size())
-
         query_output = model.Qformer.bert(
             text_input_pp,
             query_embeds=query_tokens_pp,
@@ -393,76 +202,7 @@ class BLIPExtractor(BaseExtractor):
             multimodal_embeds=multimodal_embeds,
         )
 
-        # print("out size", out.multimodal_embeds.size())
-        # # print first 10 elements of the output
-        # print("out first 10 elements", out.multimodal_embeds[0, 0, 0:10])
-
         return out
-
-    def custom_extract_multi_features_ver1(self, image, caption):
-        model = self.model
-
-        # if caption is wrapped in a list, take the first element
-        if isinstance(caption, list):
-            caption = caption[0]
-
-        with model.maybe_autocast():
-            image_embeds_frozen = model.ln_vision(model.visual_encoder(image))
-
-        image_embeds_frozen = image_embeds_frozen.float()  # (1, 257, 1408)
-        image_atts = torch.ones(
-            image_embeds_frozen.size()[:-1], dtype=torch.long
-        ).to(model.device)  # (1, 257)
-        query_tokens = model.query_tokens.expand(
-            image_embeds_frozen.shape[0], -1, -1
-        )  # (1, 32, 768)
-
-        query_atts = torch.ones(query_tokens.size()[:-1], dtype=torch.long).to(
-            self.device
-        )
-
-        text = self.tokenizer(caption, return_tensors="pt", padding=True).to(
-            self.device
-        )
-        att_mask = torch.cat([query_atts, text.attention_mask], dim=1)
-
-        # NOTE: prepare input for leave-one-out patch feature
-        n_patches = (1 + (224 - 14) // self.stride[0]) * (1 + (224 - 14) // self.stride[1])
-        mode = 1
-        assert image_embeds_frozen.shape[1] == (n_patches + 1)
-        query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1)
-        image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1)
-        image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1)
-        att_mask_pp = att_mask.repeat(n_patches + 1, 1)
-        for i in range(1, n_patches + 1):
-            if mode == 0:
-                image_atts_pp[i, :, i - 1] = 0
-            elif mode == 1:
-                image_atts_pp[i, :] = 0
-                # image_atts_pp[i, :, 0] = 1 # this is bad and will get all of the "patches" similar
-                image_atts_pp[i, :, i] = 1
-            else:
-                raise ValueError
-
-        query_output = model.Qformer.bert(
-            query_embeds=query_tokens_pp,
-            attention_mask=att_mask_pp,
-            encoder_hidden_states=image_embeds_frozen_pp,
-            encoder_attention_mask=image_atts_pp,
-            return_dict=True,
-        )
-
-        multimodal_embeds = query_output.last_hidden_state[:, : query_tokens.size(1), :]
-
-        out = BlipOutputFeatures(
-            multimodal_embeds=multimodal_embeds,
-        )
-
-        return out
-
-########################################################################################################################
-########################################################################################################################
-
 
     def extract_text_feat(self, texts, eval=True):
         assert isinstance(texts, list)
