@@ -21,5 +21,8 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Ignore the model checkpoints
+# Ignore the model checkpoints and dataset
 models/
+BLIP2_DATASET/
+learning/src.egg-info/
+local/
