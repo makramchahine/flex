@@ -38,13 +38,6 @@ class FlightILDataset(IterableDataset):
 
         if self._use_lavis_preprocess:
             if self._lavis_preprocess_cfg.name == "BlipImageEvalProcessor":
-                ##### BLIP2 eval vision preprocessor #####
-                # Compose(
-                #     Resize(size=(224, 224), interpolation=bicubic, max_size=None, antialias=warn)
-                #     ToTensor()
-                #     Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
-                # )
-                ##########################################
                 from lavis.processors import BlipImageEvalProcessor
                 pp_cls = BlipImageEvalProcessor(
                     image_size=224,
@@ -112,12 +105,10 @@ class FlightILDataset(IterableDataset):
 
                         # load the image
                         img = Image.open(os.path.join(run, image_name))
-                        # make the image have 3 channels
+                        # convert to RGB
                         img = img.convert('RGB')
-
                         # resize the image to 224x224
                         img = img.resize((224, 224))
-
                         # convert the image to a tensor
                         img = transforms.ToTensor()(img)
 
@@ -137,13 +128,13 @@ class FlightILDataset(IterableDataset):
                 image_names.sort()
                 # pick a random non zero index in len(image_names)
                 i = self._rng.choice(range(1, len(image_names)))
+
                 # load the image
                 img = Image.open(os.path.join(run, image_names[i]))
-                # make the image have 3 channels
+                # convert to RGB
                 img = img.convert('RGB')
                 # resize the image to 224x224
                 img = img.resize((224, 224))
-
                 # convert the image to a tensor
                 img = transforms.ToTensor()(img)
 
