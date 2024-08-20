@@ -26,6 +26,7 @@ class BLIPExtractor(BaseExtractor):
         checkpoint: Optional[str] = None,
         use_continuous_pe: Optional[bool] = False,
         stride: Optional[bool] = 14,
+        all_q_dims: Optional[bool] = False,
     ):
         super().__init__()
 
@@ -62,6 +63,7 @@ class BLIPExtractor(BaseExtractor):
         self.use_masked_patch_wise_feature = use_masked_patch_wise_feature
         self.append_global_features = append_global_features
         self.use_continuous_pe = use_continuous_pe
+        self.all_q_dims = all_q_dims
         if isinstance(stride, int):
             stride = [stride] * 2
         self.stride = stride
@@ -121,8 +123,16 @@ class BLIPExtractor(BaseExtractor):
             else:
                 features = self.model.extract_features(sample, mode="multimodal")
 
-            features = features.multimodal_embeds[:, 0]
-            out = features.view(1, 1, 1, features.shape[-1])
+            if not self.all_q_dims:
+                features = features.multimodal_embeds[:, 0]
+                out = features.view(1, 1, 1, features.shape[-1])
+            else:
+                features = features.multimodal_embeds
+                # reappend the first query token to reach dimension of 36 (32 + 4, is a perfect square)
+                # torch.Size([1, 32, 768]) -> torch.Size([1, 36, 768]) by repeating the first query token 4 times
+                features = torch.cat([features[:, :1].repeat(1, 4, 1), features], dim=1)
+                out = features.view(1, 6, 6, features.shape[-1])
+
             out = out.permute(0, 3, 1, 2)
 
         if self.last_linear_layer is not None:
