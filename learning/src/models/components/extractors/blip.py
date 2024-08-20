@@ -229,7 +229,6 @@ class BLIPExtractor(BaseExtractor):
     def modalities(self):
         return ["image", "text", "image_raw"]
 
-
 def _fix_pos_enc(patch_size: int, stride_hw: Tuple[int, int]):
     """
     Creates a method for position encoding interpolation.

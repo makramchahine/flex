@@ -73,7 +73,9 @@ def print_config_tree(
     if save_to_file:
         with open(Path(cfg.paths.output_dir, "config_tree.log"), "w") as file:
             rich.print(tree, file=file)
-
+    # save config file
+    file = Path(cfg.paths.output_dir, "config")
+    OmegaConf.save(config=cfg, f=file)
 
 @rank_zero_only
 def enforce_tags(cfg: DictConfig, save_to_file: bool = False) -> None:
