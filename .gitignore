@@ -26,3 +26,7 @@ models/
 BLIP2_DATASET/
 learning/src.egg-info/
 local/
+
+# Ignore pdfs and npy
+*.pdf
+*.npy
