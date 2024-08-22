@@ -26,7 +26,8 @@ model:
 
   net:
     extractor:
-      use_masked_patch_wise_feature: false
+      use_masked_patch_wise_feature: true
+      use_visual_encoder_only: false
       all_q_dims: true
       use_low_dim_feature: false
       last_linear_layer: [768, 64]

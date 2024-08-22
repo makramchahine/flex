@@ -105,5 +105,3 @@ for i, cfg_path in enumerate(cfgs):
 
 # Save the output predictions
 np.save("open_loop_outputs.npy", outputs)
-
-
