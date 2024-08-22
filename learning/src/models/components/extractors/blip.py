@@ -19,7 +19,7 @@ class BLIPExtractor(BaseExtractor):
         name: str,
         model_type: str,
         freeze_blip: bool,
-        use_low_dim_feature: Optional[bool] = True,
+        use_low_dim_feature: Optional[bool] = False,
         use_masked_patch_wise_feature: Optional[bool] = True,
         use_visual_encoder_only: Optional[bool] = False,
         append_global_features: Optional[bool] = False,
@@ -113,6 +113,8 @@ class BLIPExtractor(BaseExtractor):
                 out = torch.cat([out, global_features[None, :, None, None].repeat(out.shape[0], 1, out.shape[2], out.shape[3])], dim=1)
         
         else: # embed the entire image without masking patches
+            # annoying rename issue I don't want to trace back to the source
+            x = {"image": x["image"], "text_input": x["text"]}
             if self.freeze_blip:
                 with torch.no_grad():
                     features = self.model.extract_features(x, mode=self.mode)
