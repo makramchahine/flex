@@ -321,43 +321,6 @@ class VisionTransformer(nn.Module):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-    def interpolate_pos_encoding(self, x: torch.Tensor, w: int, h: int):
-        patch_size = self.patch_embed.patch_size
-        stride_hw = self.patched_func_stride_hw
-
-        npatch = x.shape[1] - 1
-        N = self.pos_embed.shape[1] - 1
-        if npatch == N and w == h:
-            return self.pos_embed
-        class_pos_embed = self.pos_embed[:, 0]
-        patch_pos_embed = self.pos_embed[:, 1:]
-        dim = x.shape[-1]
-        # compute number of tokens taking stride into account
-        w0 = 1 + (w - patch_size[1]) // stride_hw[1]
-        h0 = 1 + (h - patch_size[0]) // stride_hw[0]
-        assert (
-            w0 * h0 == npatch
-        ), f"""got wrong grid size for {h}x{w} with patch_size {patch_size} and 
-                                        stride {stride_hw} got {h0}x{w0}={h0 * w0} expecting {npatch}"""
-        # we add a small number to avoid floating point error in the interpolation
-        # see discussion at https://github.com/facebookresearch/dino/issues/8
-        w0, h0 = w0 + 0.1, h0 + 0.1
-        patch_pos_embed = nn.functional.interpolate(
-            patch_pos_embed.reshape(
-                1, int(math.sqrt(N)), int(math.sqrt(N)), dim
-            ).permute(0, 3, 1, 2),
-            scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
-            mode="bicubic",
-            align_corners=False,
-            recompute_scale_factor=True,
-        )
-        assert (
-            int(w0) == patch_pos_embed.shape[-2]
-            and int(h0) == patch_pos_embed.shape[-1]
-        )
-        patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
-        return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
-
     def forward_features(self, x):
         # if x does not have a batch dimension, add batch dimension so that it has a 4 dimension shape
         if len(x.shape) == 3:
@@ -369,10 +332,7 @@ class VisionTransformer(nn.Module):
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
         if self.pos_embed is not None:
-            if hasattr(self, "patched_func_stride_hw"):
-                x = x + self.interpolate_pos_encoding(x, w, h)
-            else:
-                x = x + self.pos_embed
+            x = x + self.pos_embed
         x = self.pos_drop(x)
 
         rel_pos_bias = self.rel_pos_bias() if self.rel_pos_bias is not None else None
