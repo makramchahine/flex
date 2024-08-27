@@ -298,3 +298,39 @@ class InfoSaver:
             
     def close(self):
         self.save()
+
+def get_square_indices(matrix_size, square_sizes):
+    """
+    Get indices of non-overlapping squares within a matrix, where each index list contains
+    the flattened indices of the square in the matrix.
+
+    Parameters:
+        matrix_size (int): Size of the square matrix (assumed to be square).
+        square_sizes (list): List of square sizes (e.g., [2, 4, 8]).
+
+    Returns:
+        dict: A dictionary where keys are square sizes and values are lists of lists of indices
+              for each non-overlapping square of that size.
+    """
+    indices_dict = {}
+
+    for size in square_sizes:
+        if size > matrix_size:
+            raise ValueError(f"Square size {size} cannot be larger than the matrix size {matrix_size}.")
+
+        indices = []
+        step = size
+
+        for i in range(0, matrix_size, step):
+            for j in range(0, matrix_size, step):
+                if i + size <= matrix_size and j + size <= matrix_size:
+                    square_indices = []
+                    for di in range(size):
+                        for dj in range(size):
+                            index = (i + di) * matrix_size + (j + dj)
+                            square_indices.append(index)
+                    indices.append(square_indices)
+
+        indices_dict[size] = indices
+
+    return indices_dict

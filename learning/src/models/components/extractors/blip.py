@@ -1,5 +1,7 @@
 from typing import Optional, List, Tuple
 import math
+
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -10,6 +12,7 @@ from lavis.models import load_model_and_preprocess
 from lavis.common.registry import registry
 from lavis.models.blip_models.blip_outputs import BlipOutputFeatures
 
+from src.utils.utils import get_square_indices
 from src.models.components.extractors.base import BaseExtractor
 from transformers import BertTokenizer
 
@@ -28,6 +31,7 @@ class BLIPExtractor(BaseExtractor):
         use_continuous_pe: Optional[bool] = False,
         stride: Optional[bool] = 14,
         all_q_dims: Optional[bool] = False,
+        patch_size: Optional[int] = 1,
     ):
         super().__init__()
 
@@ -70,6 +74,7 @@ class BLIPExtractor(BaseExtractor):
         if isinstance(stride, int):
             stride = [stride] * 2
         self.stride = stride
+        self.patch_size = patch_size
         
         # instantiate last layer
         if last_linear_layer is not None:
@@ -102,7 +107,7 @@ class BLIPExtractor(BaseExtractor):
                         raise ValueError
                 fH, fW = _to_size(self.stride[0]), _to_size(self.stride[1])
             else:
-                fH, fW = 16, 16 # HACK
+                fH, fW = 16//self.patch_size, 16//self.patch_size # Lazy hack
 
             assert (features.shape[0] - 1) == (fH * fW)
             global_features = features[0]
@@ -166,18 +171,32 @@ class BLIPExtractor(BaseExtractor):
             image_embeds_frozen.shape[0], -1, -1
         ).to(self.device)  # (1, 32, 768)
 
+        # NOTE: prepare input for leave-some-out patch feature
+        n_patches_frozen = (1 + (224 - 14) // self.stride[0]) * (1 + (224 - 14) // self.stride[1])
 
-        # NOTE: prepare input for leave-one-out patch feature
-        n_patches = (1 + (224 - 14) // self.stride[0]) * (1 + (224 - 14) // self.stride[1])
+        # don't mess with the stride as it is used to train the model
+        assert image_embeds_frozen.shape[1] == (n_patches_frozen + 1)
 
-        assert image_embeds_frozen.shape[1] == (n_patches + 1)
+        # instead increase the patch size through masking squares
+        n_patches = n_patches_frozen // (self.patch_size**2)
+
         query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1)
         image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1)
         image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1)
 
-        for i in range(1, n_patches + 1):
-            image_atts_pp[i, :] = 0
-            image_atts_pp[i, :, i - 1] = 1
+        # function format too lazy to refactor
+        index_list = get_square_indices(np.sqrt(n_patches_frozen).astype(int), [self.patch_size])
+        index_list = index_list[self.patch_size]
+
+        assert len(index_list) == n_patches, f"Expected {n_patches} patches, got {len(index_list)}"
+
+        # first patch is the global feature
+        image_atts_pp[0, :] = 1
+        # rest are patched by squares of size patch_size
+        for i in range(n_patches):
+            # compute indices corresponding to the square of size patch_size
+            image_atts_pp[i+1, :] = 0
+            image_atts_pp[i, :, index_list[i]] = 1
 
         # multimodal feature extraction
         if not self.use_visual_encoder_only:
