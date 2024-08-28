@@ -50,3 +50,34 @@ Training.
 ```
 $ bash scripts/train_flight.sh # you can specify directory name in bash arguments
 ```
+
+## Gym-Pybullet-Drone 
+
+### Installation
+
+Make sure to checkout on the flex branch and install the packages below
+
+```
+cd gym-pybullet-drone
+git checkout flex
+python -m pip install --upgrade "pip<23.1"
+pip install --upgrade setuptools==66
+pip install -e .
+```
+
+Couple of packages are required for running some of the code.
+```
+pip install marshmallow
+pip install arguments
+pip install future
+pip install consoleprinter
+```
+Make sure you keep your torch version from flex installation.
+Above might change the torch version, so you might need to reinstall it.
+
+Move custom assets to conda default installation (ugly)
+```
+cp -r gym_pybullet_drones/assets/* ~/miniconda3/envs/flex/lib/python3.9/site-packages/pybullet_data/
+```
+
+
