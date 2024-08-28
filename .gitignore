@@ -27,6 +27,10 @@ BLIP2_DATASET/
 learning/src.egg-info/
 local/
 
+analysis/open_loop_plotter.py
+analysis/open_loop_verification.py
+analysis/comparison_plots/
+
 # Ignore pdfs and npy
 *.pdf
 *.npy
