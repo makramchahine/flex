@@ -46,7 +46,6 @@ def closed_loop_render_set(model, init_conditions, record_hz, closed_loop_save_p
     assert closed_loop_save_path is not None
     save_path = closed_loop_save_path[0]
     makedirs(save_path, exist_ok=True)
-    makedirs(os.path.join(save_path, "pics0"), exist_ok=True)
 
 
     # ! Setup Simulator
@@ -80,7 +79,7 @@ def closed_loop_render_set(model, init_conditions, record_hz, closed_loop_save_p
         # run inference
         preds = model.forward({"image": img, "text": text})
 
-        # coonvert dictionnary of 1D tensors to array of floating numbers
+        # convert dictionnary of 1D tensors to array of floating numbers
         # dictionnary has 4 keys: "vx", "vy", "vz", "yaw"
         out = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
 
