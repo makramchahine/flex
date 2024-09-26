@@ -9,7 +9,7 @@ class Task(Enum):
     M_SHAPE = "2mshape"
     OPEN_DICT = "3open_dict"
 
-task = Task("2colors")
+task = Task("3open_dict")
 env_name = "arena"
 
 if task == Task.RB_2CHOICE:

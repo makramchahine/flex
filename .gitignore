@@ -24,6 +24,10 @@ Thumbs.db
 # Ignore the model checkpoints and dataset
 models/
 BLIP2_DATASET/
+BLIP2_DATASET_1O_1C/
+BLIP2_DATASET_1O_MC/
+BLIP2_DATASET_2O_1C/
+inference/out_video/
 learning/src.egg-info/
 local/
 

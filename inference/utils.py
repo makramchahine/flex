@@ -86,6 +86,9 @@ def generate_init_conditions_closed_loop_inference_2choice(objects_color, PYBULL
     # NOTE: y is opposite in pybullet compared to GS coordinates, so we flip it here:
     objects_relative = gs_offsets_xy / PYBULLET_TO_GS_SCALING_FACTOR * np.array([1, -1])
 
+    # shuffle the order of the objects in the string list
+    random.shuffle(objects_color)
+
     init_conditions_schema = InitConditionsClosedLoopInferenceSchema()
     init_conditions = {
         "task_name": "closed_loop_inference",
@@ -139,6 +142,9 @@ def generate_init_conditions_closed_loop_inference_3choice_random(objects_color,
 
     # NOTE: y is opposite in pybullet compared to GS coordinates, so we flip it here:
     objects_relative = gs_offsets_xy / PYBULLET_TO_GS_SCALING_FACTOR * np.array([1, -1])
+
+    # shuffle the order of the objects in the string list
+    random.shuffle(objects_color)
 
     init_conditions_schema = InitConditionsClosedLoopInferenceSchema()
     init_conditions = {
