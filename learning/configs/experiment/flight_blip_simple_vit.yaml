@@ -28,8 +28,8 @@ model:
     extractor:
       use_masked_patch_wise_feature: true
       use_visual_encoder_only: false
-      patch_size: 4
-      all_q_dims: true
+      patch_size: 1
+      all_q_dims: false
       use_low_dim_feature: false
       last_linear_layer: [768, 64]
 

@@ -23,7 +23,7 @@ Thumbs.db
 
 # Ignore the model checkpoints and dataset
 models/
-BLIP2_DATASET/
+BLIP2_DATASET*/
 learning/src.egg-info/
 local/
 

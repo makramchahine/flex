@@ -27,6 +27,7 @@ class FlightILDataset(IterableDataset):
             use_clip_preprocess: Optional[bool] = False,
             use_lavis_preprocess: Optional[bool] = False,
             lavis_preprocess_cfg: Optional[DictConfig] = None,
+            train_time_series: Optional[bool] = False,
             **kwargs,
     ):
         self.data_path = data_path[0]
