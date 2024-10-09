@@ -84,7 +84,7 @@ class BLIPExtractor(BaseExtractor):
     def forward(self, x):
         super().forward(x)
 
-        device = x["image"].device
+        device = x["image"][0].device
         if self.get_model_device() != device: # avoid setting device as it takes some time (~1e-3s)
             self.model.eval()
             self.model.to(device)
@@ -108,10 +108,14 @@ class BLIPExtractor(BaseExtractor):
                 fH, fW = _to_size(self.stride[0]), _to_size(self.stride[1])
             else:
                 fH, fW = 16//self.patch_size, 16//self.patch_size # Lazy hack
+            # assert features.shape[0] == self.time_seq * (fH * fW + 1)
 
-            assert (features.shape[0] - 1) == (fH * fW)
-            global_features = features[0]
-            out = features[1:].view(1, fH, fW, features.shape[-1])
+            # extract global features
+            global_features = features[::17] 
+            final_indices = [i for i in range(features.size(0)) if (i + 1) % 17 != 0]
+            final_features = features[final_indices]
+            num_time_seq_images = features.shape[0] // 17
+            out = final_features.view(1, fH * num_time_seq_images, fW, features.shape[-1])
             out = out.permute(0, 3, 1, 2)
             
             if self.append_global_features:
@@ -158,104 +162,118 @@ class BLIPExtractor(BaseExtractor):
     def custom_extract_features(self, sample):
         model = self.model
 
-        image = sample["image"]
+        image_set = sample["image"]
+        image_embeds_results = []
+        image_embed_proj_results = []
+        multimodal_embeds_results = []
 
-        with model.maybe_autocast():
-            image_embeds_frozen = model.ln_vision(model.visual_encoder(image))
+        for image in image_set:
+            with model.maybe_autocast():
+                image_embeds_frozen = model.ln_vision(model.visual_encoder(image))
 
-        image_embeds_frozen = image_embeds_frozen.float().to(self.device)  # (1, 257, 1408)
-        image_atts = torch.ones(
-            image_embeds_frozen.size()[:-1], dtype=torch.long
-        ).to(self.device)  # (1, 257)
-        query_tokens = model.query_tokens.expand(
-            image_embeds_frozen.shape[0], -1, -1
-        ).to(self.device)  # (1, 32, 768)
+            image_embeds_frozen = image_embeds_frozen.float().to(self.device)  # (1, 257, 1408)
+            image_atts = torch.ones(
+                image_embeds_frozen.size()[:-1], dtype=torch.long
+            ).to(self.device)  # (1, 257)
+            query_tokens = model.query_tokens.expand(
+                image_embeds_frozen.shape[0], -1, -1
+            ).to(self.device)  # (1, 32, 768)
 
-        # NOTE: prepare input for leave-some-out patch feature
-        n_patches_frozen = (1 + (224 - 14) // self.stride[0]) * (1 + (224 - 14) // self.stride[1])
+            # NOTE: prepare input for leave-some-out patch feature
+            n_patches_frozen = (1 + (224 - 14) // self.stride[0]) * (1 + (224 - 14) // self.stride[1])
 
-        # don't mess with the stride as it is used to train the model
-        assert image_embeds_frozen.shape[1] == (n_patches_frozen + 1)
+            # don't mess with the stride as it is used to train the model
+            assert image_embeds_frozen.shape[1] == (n_patches_frozen + 1)
 
-        # instead increase the patch size through masking squares
-        n_patches = n_patches_frozen // (self.patch_size**2)
+            # instead increase the patch size through masking squares
+            n_patches = n_patches_frozen // (self.patch_size**2)
 
-        query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1)
-        image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1)
-        image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1)
+            query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1)
+            image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1)
+            image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1)
 
-        # function format too lazy to refactor
-        index_list = get_square_indices(np.sqrt(n_patches_frozen).astype(int), [self.patch_size])
-        index_list = index_list[self.patch_size]
+            # function format too lazy to refactor
+            index_list = get_square_indices(np.sqrt(n_patches_frozen).astype(int), [self.patch_size])
+            index_list = index_list[self.patch_size]
 
-        assert len(index_list) == n_patches, f"Expected {n_patches} patches, got {len(index_list)}"
+            assert len(index_list) == n_patches, f"Expected {n_patches} patches, got {len(index_list)}"
 
-        # first patch is the global feature
-        image_atts_pp[0, :] = 1
-        # rest are patched by squares of size patch_size
-        for i in range(n_patches):
-            # compute indices corresponding to the square of size patch_size
-            image_atts_pp[i+1, :] = 0
-            image_atts_pp[i, :, index_list[i]] = 1
+            # first patch is the global feature
+            image_atts_pp[0, :] = 1
+            # rest are patched by squares of size patch_size
+            for i in range(n_patches):
+                # compute indices corresponding to the square of size patch_size
+                image_atts_pp[i+1, :] = 0
+                image_atts_pp[i, :, index_list[i]] = 1
 
-        # multimodal feature extraction
+            # multimodal feature extraction
+            if not self.use_visual_encoder_only:
+                caption = sample["text"]
+                # if caption is wrapped in a list, take the first element
+                if isinstance(caption, list):
+                    caption = caption[0]
+
+                query_atts = torch.ones(query_tokens.size()[:-1], dtype=torch.long).to(
+                    self.device
+                )
+                text = self.tokenizer(caption, return_tensors="pt", padding=True).to(
+                    self.device
+                )
+                att_mask = torch.cat([query_atts, text.attention_mask], dim=1).to(
+                    self.device
+                )
+
+                att_mask_pp = att_mask.repeat(n_patches + 1, 1, 1)
+                text_input_pp = text.input_ids.repeat(n_patches + 1, 1)
+
+                query_output = model.Qformer.bert(
+                    text_input_pp,
+                    query_embeds=query_tokens_pp,
+                    attention_mask=att_mask_pp,
+                    encoder_hidden_states=image_embeds_frozen_pp,
+                    encoder_attention_mask=image_atts_pp,
+                    return_dict=True,
+                )
+
+                multimodal_embeds = query_output.last_hidden_state[:, : query_tokens.size(1), :]
+
+                multimodal_embeds_results.append(multimodal_embeds)
+
+            # visual feature extraction only
+            else:
+                query_output = model.Qformer.bert(
+                    query_embeds=query_tokens_pp,
+                    encoder_hidden_states=image_embeds_frozen_pp,
+                    encoder_attention_mask=image_atts_pp,
+                    return_dict=True,
+                )
+
+                image_embeds = query_output.last_hidden_state
+
+                if self.use_low_dim_feature:
+                    image_features = F.normalize(model.vision_proj(image_embeds), dim=-1)  # (1, 32, 256)
+                    image_embeds_results.append(image_embeds)
+                    image_embed_proj_results.append(image_features)
+                else:
+                    image_embeds_results.append(image_embeds)
+        
         if not self.use_visual_encoder_only:
-            caption = sample["text"]
-            # if caption is wrapped in a list, take the first element
-            if isinstance(caption, list):
-                caption = caption[0]
-
-            query_atts = torch.ones(query_tokens.size()[:-1], dtype=torch.long).to(
-                self.device
-            )
-            text = self.tokenizer(caption, return_tensors="pt", padding=True).to(
-                self.device
-            )
-            att_mask = torch.cat([query_atts, text.attention_mask], dim=1).to(
-                self.device
-            )
-
-            att_mask_pp = att_mask.repeat(n_patches + 1, 1, 1)
-            text_input_pp = text.input_ids.repeat(n_patches + 1, 1)
-
-            query_output = model.Qformer.bert(
-                text_input_pp,
-                query_embeds=query_tokens_pp,
-                attention_mask=att_mask_pp,
-                encoder_hidden_states=image_embeds_frozen_pp,
-                encoder_attention_mask=image_atts_pp,
-                return_dict=True,
-            )
-
-            multimodal_embeds = query_output.last_hidden_state[:, : query_tokens.size(1), :]
-
+            multimodal_embeds_final = torch.cat(multimodal_embeds_results, dim=0)
             out = BlipOutputFeatures(
-                multimodal_embeds=multimodal_embeds,
-            )
-
-        # visual feature extraction only
+                    multimodal_embeds=multimodal_embeds_final,
+                  )
         else:
-            query_output = model.Qformer.bert(
-                query_embeds=query_tokens_pp,
-                encoder_hidden_states=image_embeds_frozen_pp,
-                encoder_attention_mask=image_atts_pp,
-                return_dict=True,
-            )
-
-            image_embeds = query_output.last_hidden_state
-
+            image_embeds_final = torch.cat(image_embeds_results, dim=0)
             if self.use_low_dim_feature:
-                image_features = F.normalize(model.vision_proj(image_embeds), dim=-1)  # (1, 32, 256)
-
+                image_embed_proj_final = torch.cat(image_embed_proj_results, dim=0)
                 out = BlipOutputFeatures(
-                    image_embeds=image_embeds,
-                    image_embeds_proj=image_features,
+                    image_embeds=image_embeds_final,
+                    image_embeds_proj=image_embed_proj_final,
                 )
             else:
                 out = BlipOutputFeatures(
-                    image_embeds=image_embeds,
-                )
-
+                        image_embeds=image_embeds_final,
+                    )
         return out
 
     def extract_text_feat(self, texts, eval=True):

@@ -1,0 +1,81 @@
+[2024-09-21 23:32:39,438][src.utils.utils][INFO] - Enforcing tags! <cfg.extras.enforce_tags=True>
+[2024-09-21 23:32:39,498][src.utils.utils][INFO] - Printing config tree with Rich! <cfg.extras.print_config=True>
+[2024-09-21 23:32:39,693][__main__][INFO] - Instantiating datamodule <src.data.flight_datamodule.FlightDataModule>
+[2024-09-21 23:32:39,745][__main__][INFO] - Instantiating model <src.models.flight_module.FlightLitModule>
+[2024-09-21 23:33:02,323][root][INFO] - freeze vision encoder
+[2024-09-21 23:33:05,467][root][INFO] - load checkpoint from https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+[2024-09-21 23:33:06,498][__main__][INFO] - Instantiating callbacks...
+[2024-09-21 23:33:06,498][src.utils.instantiators][INFO] - Instantiating callback <lightning.pytorch.callbacks.ModelCheckpoint>
+[2024-09-21 23:33:06,510][src.utils.instantiators][INFO] - Instantiating callback <lightning.pytorch.callbacks.RichModelSummary>
+[2024-09-21 23:33:06,511][src.utils.instantiators][INFO] - Instantiating callback <lightning.pytorch.callbacks.RichProgressBar>
+[2024-09-21 23:33:06,511][src.utils.instantiators][INFO] - Instantiating callback <lightning.pytorch.callbacks.BackboneFinetuning>
+[2024-09-21 23:33:06,512][__main__][INFO] - Instantiating loggers...
+[2024-09-21 23:33:06,512][src.utils.instantiators][INFO] - Instantiating logger <lightning.pytorch.loggers.csv_logs.CSVLogger>
+[2024-09-21 23:33:06,514][src.utils.instantiators][INFO] - Instantiating logger <lightning.pytorch.loggers.tensorboard.TensorBoardLogger>
+[2024-09-21 23:33:06,518][__main__][INFO] - Instantiating trainer <lightning.pytorch.trainer.Trainer>
+[2024-09-21 23:33:06,565][__main__][INFO] - Logging hyperparameters!
+[2024-09-21 23:33:08,580][__main__][INFO] - Starting training!
+[2024-09-21 23:34:04,156][src.utils.utils][ERROR] - 
+Traceback (most recent call last):
+  File "/home/gridsan/wyang/flex/learning/src/utils/utils.py", line 71, in wrap
+    metric_dict, object_dict = task_func(cfg=cfg)
+  File "/home/gridsan/wyang/flex/learning/src/train.py", line 119, in train
+    trainer.fit(model=model, datamodule=datamodule, ckpt_path=None)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/trainer/trainer.py", line 538, in fit
+    call._call_and_handle_interrupt(
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/trainer/call.py", line 46, in _call_and_handle_interrupt
+    return trainer.strategy.launcher.launch(trainer_fn, *args, trainer=trainer, **kwargs)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/strategies/launchers/multiprocessing.py", line 144, in launch
+    while not process_context.join():
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/multiprocessing/spawn.py", line 189, in join
+    raise ProcessRaisedException(msg, error_index, failed_process.pid)
+torch.multiprocessing.spawn.ProcessRaisedException: 
+
+-- Process 0 terminated with the following error:
+Traceback (most recent call last):
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/multiprocessing/spawn.py", line 76, in _wrap
+    fn(i, *args)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/strategies/launchers/multiprocessing.py", line 173, in _wrapping_function
+    results = function(*args, **kwargs)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/trainer/trainer.py", line 574, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/trainer/trainer.py", line 981, in _run
+    results = self._run_stage()
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/trainer/trainer.py", line 1025, in _run_stage
+    self.fit_loop.run()
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/loops/fit_loop.py", line 205, in run
+    self.advance()
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/loops/fit_loop.py", line 363, in advance
+    self.epoch_loop.run(self._data_fetcher)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 140, in run
+    self.advance(data_fetcher)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/loops/training_epoch_loop.py", line 212, in advance
+    batch, _, __ = next(data_fetcher)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/loops/fetchers.py", line 127, in __next__
+    self.batches.append(super().__next__())
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/loops/fetchers.py", line 60, in __next__
+    batch = next(self.iterator)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/utilities/combined_loader.py", line 341, in __next__
+    out = next(self._iterator)
+  File "/home/gridsan/wyang/.conda/envs/flex/lib/python3.9/site-packages/lightning/pytorch/utilities/combined_loader.py", line 78, in __next__
+    out[i] = next(self.iterators[i])
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 630, in __next__
+    data = self._next_data()
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 1344, in _next_data
+    return self._process_data(data)
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/utils/data/dataloader.py", line 1370, in _process_data
+    data.reraise()
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/_utils.py", line 706, in reraise
+    raise exception
+NotADirectoryError: Caught NotADirectoryError in DataLoader worker process 0.
+Original Traceback (most recent call last):
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/utils/data/_utils/worker.py", line 309, in _worker_loop
+    data = fetcher.fetch(index)  # type: ignore[possibly-undefined]
+  File "/home/gridsan/wyang/.local/lib/python3.9/site-packages/torch/utils/data/_utils/fetch.py", line 33, in fetch
+    data.append(next(self.dataset_iter))
+  File "/home/gridsan/wyang/flex/learning/src/data/components/flight_il_dataset.py", line 127, in __iter__
+    image_names = [f for f in os.listdir(run) if f.endswith('.png')]
+NotADirectoryError: [Errno 20] Not a directory: '/home/gridsan/wyang/BLIP2_DATASET/train/.DS_Store'
+
+
+[2024-09-21 23:34:04,164][src.utils.utils][INFO] - Output dir: /home/gridsan/wyang/flex/logs/train_flight/2024-09-21/23-32-38

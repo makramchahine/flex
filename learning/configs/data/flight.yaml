@@ -21,3 +21,4 @@ batch_size: 1
 num_workers: 0
 pin_memory: False
 persistent_workers: true # avoid reinstantiate vista simulator
+time_seq: 4

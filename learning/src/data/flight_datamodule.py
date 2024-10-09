@@ -14,6 +14,7 @@ class FlightDataModule(LightningDataModule):
             buffer_size: Optional[int] = 1,
             snippet_size: Optional[int] = 100,
             batch_size: int = 64,
+            time_seq: int = 1,
             num_workers: Optional[str] = 0,
             pin_memory: Optional[bool] = False,
             persistent_workers: Optional[bool] = False,
@@ -43,16 +44,16 @@ class FlightDataModule(LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         if stage == "fit" or stage is None:
             self.data_train, self.worker_init_fn_train = self._instantiate_dataset(
-                self.hparams.train_data_path, self.hparams.mode, train=True, shuffle=True)
+                self.hparams.train_data_path, self.hparams.mode, train=True, shuffle=True, time_seq=self.hparams.time_seq)
 
             self.data_val, self.worker_init_fn_val = self._instantiate_dataset(
                 self.hparams.eval_data_path, self.hparams.mode)
 
         if stage == "test" or stage is None:
             self.data_test, self.worker_init_fn_test = self._instantiate_dataset(
-                self.hparams.eval_data_path, self.hparams.mode)
+                self.hparams.eval_data_path, self.hparams.mode, time_seq=1)
 
-    def _instantiate_dataset(self, data_path, mode="IL", train=False, shuffle=True):
+    def _instantiate_dataset(self, data_path, mode="IL", train=False, shuffle=True, time_seq=1):
         from src.data.components.flight_il_dataset import FlightILDataset, worker_init_fn
         dataset_cls = FlightILDataset
         dataset = dataset_cls(
@@ -60,6 +61,7 @@ class FlightDataModule(LightningDataModule):
             train=train,
             snippet_size=self.hparams.snippet_size,
             shuffle=shuffle,
+            time_seq=time_seq,
             use_standardize=self.hparams.use_standardize,
             use_clip_preprocess=self.hparams.use_clip_preprocess,
             use_lavis_preprocess=self.hparams.use_lavis_preprocess,

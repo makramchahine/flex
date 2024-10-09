@@ -22,6 +22,7 @@ class FlightILDataset(IterableDataset):
             data_path: List[str],
             train: Optional[bool] = False,
             shuffle: Optional[bool] = True,
+            time_seq: Optional[int] = 1,
             snippet_size: Optional[int] = 100,
             use_standardize: Optional[bool] = True,
             use_clip_preprocess: Optional[bool] = False,
@@ -36,6 +37,7 @@ class FlightILDataset(IterableDataset):
         self._use_lavis_preprocess = use_lavis_preprocess
         self._lavis_preprocess_cfg = lavis_preprocess_cfg
         self._shuffle = shuffle
+        self._time_seq = time_seq
 
         if self._use_lavis_preprocess:
             if self._lavis_preprocess_cfg.name == "BlipImageEvalProcessor":
@@ -99,26 +101,28 @@ class FlightILDataset(IterableDataset):
                     assert len(image_names) == len(labels)+1
 
                     # for each image in the run
-                    for i, image_name in enumerate(image_names):
+                    for i,_ in enumerate(image_names):
                         # skip first image to account for data mismatch
                         if i == 0:
                             continue
+                        img_out = {"image": [], "text": text}
 
-                        # load the image
-                        img = Image.open(os.path.join(run, image_name))
-                        # convert to RGB
-                        img = img.convert('RGB')
-                        # resize the image to 224x224
-                        img = img.resize((224, 224))
-                        # convert the image to a tensor
-                        img = transforms.ToTensor()(img)
+                        for dx in range(self._time_seq):
+                            im_index = max(1, i - dx) # pad the first image if we're at start of time series
+                            img = Image.open(os.path.join(run, image_names[im_index])) 
+                            # convert to RGB
+                            img = img.convert('RGB')
+                            # resize the image to 224x224
+                            img = img.resize((224, 224))
+                            # convert the image to a tensor
+                            img = transforms.ToTensor()(img)
+                            img_out["image"].append(img)
 
                         # label is the 4 first elements of the i-th row of the labels dataframe
                         label = labels.iloc[i-1, :4].values
                         label = np.array(label).astype(np.float32)
-
                         # yield the image, text and the label
-                        yield {"image": img, "text":text}, OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
+                        yield img_out.copy(), OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
 
             else:
                 # pick a random run folder in the data path
@@ -129,31 +133,34 @@ class FlightILDataset(IterableDataset):
                 image_names.sort()
                 # pick a random non zero index in len(image_names)
                 i = self._rng.choice(range(1, len(image_names)))
-
-                # load the image
-                img = Image.open(os.path.join(run, image_names[i]))
-                # convert to RGB
-                img = img.convert('RGB')
-                # resize the image to 224x224
-                img = img.resize((224, 224))
-                # convert the image to a tensor
-                img = transforms.ToTensor()(img)
-
+                
                 # load the text input instruction as a string
                 with open(os.path.join(run,  'label.txt'), 'r') as f:
                     text = f.read()
 
                 # load the labels from the data_out.csv file with pandas, ignore the header
                 labels = pd.read_csv(os.path.join(run, 'data_out.csv'))
+
+                img_out = {"image": [], "text": text}
+                # iterate through the past time_seq images
+                for dx in range(self._time_seq):
+                    # load the image
+                    im_index = max(1, i - dx) # pad the first image if we're at start of time series
+                    img = Image.open(os.path.join(run, image_names[im_index])) 
+                    # convert to RGB
+                    img = img.convert('RGB')
+                    # resize the image to 224x224
+                    img = img.resize((224, 224))
+                    # convert the image to a tensor
+                    img = transforms.ToTensor()(img)
+                    img_out["image"].append(img)
+
                 # label is the 4 first elements of the i-th row of the labels dataframe
                 label = labels.iloc[i-1, :4].values
                 label = np.array(label).astype(np.float32)
 
                 # yield the image, text and the label
-                yield {"image": img, "text":text}, OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
-
-
-
+                yield img_out.copy(), OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
 
 def worker_init_fn(worker_id):
     worker_info = torch.utils.data.get_worker_info()
