@@ -1,5 +1,6 @@
 from typing import Optional
 from omegaconf import DictConfig
+from torch import nn
 
 from src.models.components.policies.base import BasePolicy
 
@@ -9,6 +10,8 @@ class TransformerPolicy(BasePolicy):
         self,
         model_type: Optional[str] = 'SimpleViT',
         cfg: Optional[DictConfig] = None,
+        hidden_dim: Optional[int] = None,
+        lstm_layers: int = 1
     ):
         super().__init__()
         
@@ -97,8 +100,22 @@ class TransformerPolicy(BasePolicy):
 
         self.model_type = model_type
         self.cfg = cfg
+        self.lstm = None
+        if hidden_dim is not None:
+            self.lstm = nn.LSTM(
+                input_size=cfg.num_classes,
+                hidden_size=hidden_dim,
+                num_layers=lstm_layers,
+                batch_first=False          # Batch dim is actually sequence dim, one sequence at a time, can be changed later
+            )
+            self.hidden_state = None
+            self.fc = nn.Linear(hidden_dim, cfg.num_classes)
 
     def forward(self, x):
         out = self.model(x)
+        
+        if self.lstm is not None:
+            out, self.hidden_state = self.lstm(out, self.hidden_state)
+            out = self.fc(out)
         
         return out
