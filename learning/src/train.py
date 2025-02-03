@@ -47,9 +47,9 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         Tuple[dict, dict]: Dict with metrics and dict with all instantiated objects.
     """
 
-    if cfg.get("pytorch_sharing_strategy"):
-        import torch.multiprocessing
-        torch.multiprocessing.set_sharing_strategy(cfg.pytorch_sharing_strategy)
+    # if cfg.get("pytorch_sharing_strategy"):
+    #     import torch.multiprocessing
+    #     torch.multiprocessing.set_sharing_strategy(cfg.pytorch_sharing_strategy)
 
     # set seed for random number generators in pytorch, numpy and python.random
     if cfg.get("seed"):

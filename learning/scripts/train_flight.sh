@@ -7,7 +7,7 @@ source $CURRENT_DIR/setup_macro.sh
 
 args=(
     task_name=$TASK_NAME
-    experiment=flight_blip_simple_vit
+    experiment=flight_blip_lstm
 )
 
 python src/train.py "${args[@]}"

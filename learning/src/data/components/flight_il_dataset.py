@@ -100,7 +100,7 @@ class FlightILDataset(IterableDataset):
                     #looping over texts in the case of multiple/sequence of text instructions
                     for j, text in enumerate(texts):
                         # load the labels from the data_out.csv file with pandas, ignore the header
-                        labels = pd.read_csv(os.path.join(run, f'data_out{j if j>0 else ''}.csv'))
+                        labels = pd.read_csv(os.path.join(run, f'data_out{j if j>0 else ""}.csv'))
                         # for each image in the run
                         for i, image_name in enumerate(image_names):
                             # skip first image to account for data mismatch

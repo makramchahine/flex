@@ -1,0 +1,7 @@
+_target_: src.models.components.policies.lstm.LSTMPolicy
+cfg:
+  num_classes: 4
+  channels: 64 # should be consistent with the feature extractor
+  spatial_dim: 16
+  hidden_dim: 128
+  num_layers: 2

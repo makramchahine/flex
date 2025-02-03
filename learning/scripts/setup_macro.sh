@@ -18,3 +18,7 @@ export PRETRAINED_SAM_DIR="../local/pretrained_ckpt"
 ## BLIP
 export PRETRAINED_BLIP_DIR="${TORCH_HOME}/hub/checkpoints"
 export HF_HOME="../local/pretrained_ckpt"
+
+export PYTHONPATH=$PYTHONPATH:/home/alex/flex/gym-pybullet-drones
+export PATH=$PATH:/home/alex/flex/learning/src
+export PYTHONPATH=$PYTHONPATH:/home/alex/flex/learning

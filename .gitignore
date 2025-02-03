@@ -22,7 +22,7 @@ Thumbs.db
 .vscode/
 
 # Ignore the model checkpoints and dataset
-models/
+# models/
 BLIP2_DATASET/
 BLIP2_DATASET_1O_1C/
 BLIP2_DATASET_1O_MC/
