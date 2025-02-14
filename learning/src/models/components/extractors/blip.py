@@ -96,6 +96,8 @@ class BLIPExtractor(BaseExtractor):
             else:
                 raw_out = self.extract_features(x)
             features = raw_out.multimodal_embeds[:, 0] if not self.use_visual_encoder_only else raw_out.image_embeds[:, 0]
+            batch_size = x['image'].shape[0]
+            features = features.view(batch_size, -1, features.shape[-1])
 
             if self.use_continuous_pe:
                 def _to_size(_stride): # HACK
@@ -109,9 +111,11 @@ class BLIPExtractor(BaseExtractor):
             else:
                 fH, fW = 16//self.patch_size, 16//self.patch_size # Lazy hack
 
-            assert (features.shape[0] - 1) == (fH * fW)
-            global_features = features[0]
-            out = features[1:].view(1, fH, fW, features.shape[-1])
+            # print(features.shape, fH, fW, "features shape, batch")
+
+            assert (features.shape[1] - 1) == (fH * fW)
+            global_features = features[:, 0]
+            out = features[:, 1:].view(batch_size, fH, fW, features.shape[-1])
             out = out.permute(0, 3, 1, 2)
             
             if self.append_global_features:
@@ -158,18 +162,18 @@ class BLIPExtractor(BaseExtractor):
     def custom_extract_features(self, sample):
         model = self.model
 
-        image = sample["image"]
+        image = sample["image"] # (b, 3, 224, 224)
 
         with model.maybe_autocast():
             image_embeds_frozen = model.ln_vision(model.visual_encoder(image))
 
-        image_embeds_frozen = image_embeds_frozen.float().to(self.device)  # (1, 257, 1408)
+        image_embeds_frozen = image_embeds_frozen.float().to(self.device)  # (b, 257, 1408)
         image_atts = torch.ones(
             image_embeds_frozen.size()[:-1], dtype=torch.long
-        ).to(self.device)  # (1, 257)
+        ).to(self.device)  # (b, 257)
         query_tokens = model.query_tokens.expand(
             image_embeds_frozen.shape[0], -1, -1
-        ).to(self.device)  # (1, 32, 768)
+        ).to(self.device)  # (b, 32, 768)
 
         # NOTE: prepare input for leave-some-out patch feature
         n_patches_frozen = (1 + (224 - 14) // self.stride[0]) * (1 + (224 - 14) // self.stride[1])
@@ -180,9 +184,9 @@ class BLIPExtractor(BaseExtractor):
         # instead increase the patch size through masking squares
         n_patches = n_patches_frozen // (self.patch_size**2)
 
-        query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1)
-        image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1)
-        image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1)
+        query_tokens_pp = query_tokens.repeat(n_patches + 1, 1, 1) # (b*(n+1), 32, 768)
+        image_embeds_frozen_pp = image_embeds_frozen.repeat(n_patches + 1, 1, 1) # (b*(n+1), 257, 1408)
+        image_atts_pp = image_atts.repeat(n_patches + 1, 1, 1) # (n+1, b, 257)
 
         # function format too lazy to refactor
         index_list = get_square_indices(np.sqrt(n_patches_frozen).astype(int), [self.patch_size])
@@ -191,11 +195,11 @@ class BLIPExtractor(BaseExtractor):
         assert len(index_list) == n_patches, f"Expected {n_patches} patches, got {len(index_list)}"
 
         # first patch is the global feature
-        image_atts_pp[0, :] = 1
+        image_atts_pp[0, :, :] = 1
         # rest are patched by squares of size patch_size
         for i in range(n_patches):
             # compute indices corresponding to the square of size patch_size
-            image_atts_pp[i+1, :] = 0
+            image_atts_pp[i+1, :, :] = 0
             image_atts_pp[i, :, index_list[i]] = 1
 
         # multimodal feature extraction
@@ -207,16 +211,21 @@ class BLIPExtractor(BaseExtractor):
 
             query_atts = torch.ones(query_tokens.size()[:-1], dtype=torch.long).to(
                 self.device
-            )
+            ) # (b, 32)
             text = self.tokenizer(caption, return_tensors="pt", padding=True).to(
                 self.device
-            )
-            att_mask = torch.cat([query_atts, text.attention_mask], dim=1).to(
+            ) # (1, 8)
+            # print(query_atts.shape, text.attention_mask.shape, "shape test")
+            batch_correction = 1 if query_atts.shape[0] == text.attention_mask.shape[0] else query_atts.shape[0]
+            att_mask = torch.cat([query_atts, text.attention_mask.repeat(batch_correction, 1)], dim=1).to(
                 self.device
-            )
+            ) # (b, 40)
+            # print(att_mask.shape, text.input_ids.shape, "before bert shape")
 
-            att_mask_pp = att_mask.repeat(n_patches + 1, 1, 1)
-            text_input_pp = text.input_ids.repeat(n_patches + 1, 1)
+            att_mask_pp = att_mask.repeat(n_patches + 1, 1) # ((n+1)*b, 40)
+            text_input_pp = text.input_ids.repeat(batch_correction * (n_patches + 1), 1) # (b * (n+1), 8)
+            image_atts_pp = image_atts_pp.view(-1, image_atts_pp.shape[-1]) # (b * (n+1), 257)
+            # print(att_mask_pp.shape, text_input_pp.shape, query_tokens_pp.shape, image_embeds_frozen_pp.shape, image_atts_pp.shape, "right before bert shape")
 
             query_output = model.Qformer.bert(
                 text_input_pp,

@@ -28,7 +28,7 @@ model:
     extractor:
       use_masked_patch_wise_feature: true
       use_visual_encoder_only: false
-      patch_size: 1
+      patch_size: 2
       all_q_dims: false
       use_low_dim_feature: false
       last_linear_layer: [768, 64]
@@ -39,7 +39,7 @@ model:
         channels: 64
 
 data:
-  batch_size: 1
+  batch_size: 32
   num_workers: 1 # NOTE: otherwise cannot run online closed loop eval
 
   use_standardize: false

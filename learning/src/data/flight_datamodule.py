@@ -59,7 +59,7 @@ class FlightDataModule(LightningDataModule):
             data_path=data_path,
             train=train,
             snippet_size=self.hparams.snippet_size,
-            shuffle=shuffle,
+            shuffle=False,                              #changed to false for LSTM 
             use_standardize=self.hparams.use_standardize,
             use_clip_preprocess=self.hparams.use_clip_preprocess,
             use_lavis_preprocess=self.hparams.use_lavis_preprocess,

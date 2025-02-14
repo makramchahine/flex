@@ -2,6 +2,9 @@ _target_: src.models.components.policies.lstm.LSTMPolicy
 cfg:
   num_classes: 4
   channels: 64 # should be consistent with the feature extractor
-  spatial_dim: 16
+  spatial_dim: 8 # should be consistent with the feature extractor
+  hidden_channels: 8 # first linear layer reduced channels from extractor to this
   hidden_dim: 128
   num_layers: 2
+  seq_length: 32
+  reset_count: 3

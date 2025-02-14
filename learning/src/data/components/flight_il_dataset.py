@@ -27,7 +27,9 @@ class FlightILDataset(IterableDataset):
             use_clip_preprocess: Optional[bool] = False,
             use_lavis_preprocess: Optional[bool] = False,
             lavis_preprocess_cfg: Optional[DictConfig] = None,
-            multi_instruction: Optional[bool] = True,
+            multi_instruction: Optional[bool] = False,
+            seq_length = 32,
+            stride = 5,
             **kwargs,
     ):
         self.data_path = data_path[0]
@@ -37,6 +39,8 @@ class FlightILDataset(IterableDataset):
         self._lavis_preprocess_cfg = lavis_preprocess_cfg
         self._shuffle = shuffle
         self._multi_instructions = multi_instruction
+        self._seq_length = seq_length
+        self._stride = stride
 
         if self._use_lavis_preprocess:
             if self._lavis_preprocess_cfg.name == "BlipImageEvalProcessor":
@@ -79,13 +83,11 @@ class FlightILDataset(IterableDataset):
                 # for each run folder in the data path
                 for run in os.listdir(self.data_path):
                     run = os.path.join(self.data_path, run)
-                    # list all png images in the run folder
+                    # list all png images in the run folder and sort with image names
                     image_names = [f for f in os.listdir(run) if f.endswith('.png')]
-                    # sort the list of image names
                     image_names.sort()
 
                     # print(f"Run: {run} has {len(image_names)} images")
-
 
                     # load the text input instruction as a string
                     with open(os.path.join(run,  'label.txt'), 'r') as f:
@@ -101,36 +103,40 @@ class FlightILDataset(IterableDataset):
                     for j, text in enumerate(texts):
                         # load the labels from the data_out.csv file with pandas, ignore the header
                         labels = pd.read_csv(os.path.join(run, f'data_out{j if j>0 else ""}.csv'))
-                        # for each image in the run
-                        for i, image_name in enumerate(image_names):
-                            # skip first image to account for data mismatch
-                            if i == 0:
-                                continue
+                        reached_last = False
+                        stride_start = 1 # skip first image to account for data mismatch
+                        while not reached_last:
+                            for i in range(self._seq_length):
+                                data_id = i + stride_start
+                                if data_id > len(labels):
+                                    data_id = len(labels)
+                                    reached_last = True
 
-                            # load the image
-                            img = Image.open(os.path.join(run, image_name))
-                            # convert to RGB
-                            img = img.convert('RGB')
-                            # resize the image to 224x224
-                            img = img.resize((224, 224))
-                            # convert the image to a tensor
-                            img = transforms.ToTensor()(img)
+                                # load the image and preprocess to make it 224x224 tensor
+                                # print('image_path', os.path.join(run, image_names[data_id]))
+                                img = Image.open(os.path.join(run, image_names[data_id]))
+                                img = img.convert('RGB')
+                                img = img.resize((224, 224))
+                                img = transforms.ToTensor()(img)
 
+                                if self._multi_instructions:
+                                    batch_imgs.append(img)
+                                else:
+                                    # label is the 4 first elements of the i-th row of the labels dataframe
+                                    label = labels.iloc[data_id - 1, :4].values
+                                    label = np.array(label).astype(np.float32)
+                                    # print('label path', label)
+                                    # yield the image, text and the label
+                                    yield {"image": img, "text":text}, OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
                             if self._multi_instructions:
-                                batch_imgs.append(img)
-                            else:
-                                # label is the 4 first elements of the i-th row of the labels dataframe
-                                label = labels.iloc[i-1, :4].values
+                                label = labels.iloc[stride_start: stride_start + self._seq_length, :4].values
+                                if label.shape[0] < self._seq_length:
+                                    last_row = label[-1] if label.shape[0] > 0 else np.zeros(4)  # Handle empty case
+                                    padding = np.tile(last_row, (self._seq_length - label.shape[0], 1))
+                                    label = np.vstack([label, padding])
                                 label = np.array(label).astype(np.float32)
-
-                                # yield the image, text and the label
-                                yield {"image": img, "text":text}, OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
-                        if self._multi_instructions:
-                            label = labels.iloc[:, :4].values
-                            label = np.array(label).astype(np.float32)
-                            yield {"image": torch.stack(batch_imgs), "text":text}, OrderedDict({"vx": label[:, 0], "vy": label[:, 1], "vz": label[:, 2], "yaw": label[:, 3]})
-
-
+                                yield {"image": torch.stack(batch_imgs), "text":text}, OrderedDict({"vx": label[:, 0], "vy": label[:, 1], "vz": label[:, 2], "yaw": label[:, 3]})
+                            stride_start += self._stride
             else:
                 # pick a random run folder in the data path
                 run = self._rng.choice(os.listdir(self.data_path))
