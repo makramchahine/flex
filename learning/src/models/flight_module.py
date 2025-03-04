@@ -63,16 +63,21 @@ class FlightLitModule(LightningModule):
         })
         
         self.closed_loop_eval_transform = dict()
+        self._stop_criterion = torch.nn.BCEWithLogitsLoss()
 
     def forward(self, x: torch.Tensor):
         return self.net(x)
     
     def model_step(self, batch: Any):
         x, y = batch
-        preds = self.forward(x)
-        losses = self.criterion(preds, y)
+        x_is_last = x['is_last'].to(torch.float32).view(-1, 1)
+        preds_action, preds_stop = self.forward(x)
+        losses = self.criterion(preds_action, y)
+        # print(x_is_last, preds_stop, x_is_last.shape, preds_stop.shape)
+        # pause = input('sanity check')
+        losses['total'] += self._stop_criterion(preds_stop, x_is_last)
 
-        return losses, preds, y
+        return losses, preds_action, y
     
     def on_train_start(self):
         # by default lightning executes validation step sanity checks before training starts,

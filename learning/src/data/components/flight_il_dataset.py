@@ -11,7 +11,8 @@ import numpy as np
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from functools import partial
-from src.data.components.utils import transform_rgb
+import torchvision.transforms.functional as TF
+from torchvision.transforms import InterpolationMode
 import cv2
 
 
@@ -20,6 +21,7 @@ class FlightILDataset(IterableDataset):
     def __init__(
             self,
             data_path: List[str],
+            load_features_directly: Optional[bool] = False,
             train: Optional[bool] = False,
             shuffle: Optional[bool] = True,
             snippet_size: Optional[int] = 100,
@@ -37,10 +39,11 @@ class FlightILDataset(IterableDataset):
         self._use_clip_preprocess = use_clip_preprocess
         self._use_lavis_preprocess = use_lavis_preprocess
         self._lavis_preprocess_cfg = lavis_preprocess_cfg
-        self._shuffle = shuffle
+        self._shuffle = False#shuffle
         self._multi_instructions = multi_instruction
         self._seq_length = seq_length
         self._stride = stride
+        self._load_features_directly = load_features_directly
 
         if self._use_lavis_preprocess:
             if self._lavis_preprocess_cfg.name == "BlipImageEvalProcessor":
@@ -81,23 +84,24 @@ class FlightILDataset(IterableDataset):
         while True:
             if not self._shuffle:
                 # for each run folder in the data path
-                for run in os.listdir(self.data_path):
+                runs = os.listdir(self.data_path)
+                runs.sort()
+                for run in runs:
                     run = os.path.join(self.data_path, run)
-                    # list all png images in the run folder and sort with image names
-                    image_names = [f for f in os.listdir(run) if f.endswith('.png')]
+                    if self._load_features_directly:
+                        run_feat = run.replace('DATASET', 'Features')
+                        image_names = [f for f in os.listdir(run_feat) if f.endswith('.pth')]
+                    else:
+                        image_names = [f for f in os.listdir(run) if f.endswith('.png')]
                     image_names.sort()
 
-                    # print(f"Run: {run} has {len(image_names)} images")
+                    # print(f"Run: {run} has {len(image_names)} images", self.data_path)
 
                     # load the text input instruction as a string
                     with open(os.path.join(run,  'label.txt'), 'r') as f:
                         texts = f.read()
                     texts = texts.split('\n')
-
-                    # print(f"Run: {run} has {len(labels)} labels")
-
-                    # assert that there are as many rows of numerical labels as there are images
-                    # assert len(image_names) == len(labels)+1
+                    
                     batch_imgs = []
                     #looping over texts in the case of multiple/sequence of text instructions
                     for j, text in enumerate(texts):
@@ -108,16 +112,20 @@ class FlightILDataset(IterableDataset):
                         while not reached_last:
                             for i in range(self._seq_length):
                                 data_id = i + stride_start
-                                if data_id > len(labels):
+                                if data_id > 0.5 * len(labels):
                                     data_id = len(labels)
                                     reached_last = True
 
                                 # load the image and preprocess to make it 224x224 tensor
                                 # print('image_path', os.path.join(run, image_names[data_id]))
-                                img = Image.open(os.path.join(run, image_names[data_id]))
-                                img = img.convert('RGB')
-                                img = img.resize((224, 224))
-                                img = transforms.ToTensor()(img)
+                                if self._load_features_directly:
+                                    img = torch.load(os.path.join(run_feat, image_names[data_id]), map_location=torch.device('cpu'), weights_only=False)
+                                    img = img[0]
+                                else:
+                                    img = Image.open(os.path.join(run, image_names[data_id]))
+                                    img = img.convert('RGB')
+                                    img = img.resize((224, 224))
+                                    img = transforms.ToTensor()(img)
 
                                 if self._multi_instructions:
                                     batch_imgs.append(img)
@@ -127,7 +135,7 @@ class FlightILDataset(IterableDataset):
                                     label = np.array(label).astype(np.float32)
                                     # print('label path', label)
                                     # yield the image, text and the label
-                                    yield {"image": img, "text":text}, OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
+                                    yield {"image": img, "text":text, "is_last":reached_last}, OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
                             if self._multi_instructions:
                                 label = labels.iloc[stride_start: stride_start + self._seq_length, :4].values
                                 if label.shape[0] < self._seq_length:
@@ -141,24 +149,33 @@ class FlightILDataset(IterableDataset):
                 # pick a random run folder in the data path
                 run = self._rng.choice(os.listdir(self.data_path))
                 run = os.path.join(self.data_path, run)
-                # sort the list of image names
-                image_names = [f for f in os.listdir(run) if f.endswith('.png')]
-                image_names.sort()
-                # pick a random non zero index in len(image_names)
-                i = self._rng.choice(range(1, len(image_names)))
+                if self._load_features_directly:
+                    run_feat = run.replace('DATASET', 'Features')
+                    image_names = [f for f in os.listdir(run_feat) if f.endswith('.pth')]
+                    image_names.sort()
+                    i = self._rng.choice(range(1, len(image_names)))
+                    img = torch.load(os.path.join(run_feat, image_names[i]), map_location=torch.device('cpu'))
+                    img = img[0]
+                    text = ''
+                else:
+                    # sort the list of image names
+                    image_names = [f for f in os.listdir(run) if f.endswith('.png')]
+                    image_names.sort()
+                    # pick a random non zero index in len(image_names)
+                    i = self._rng.choice(range(1, len(image_names)))
 
-                # load the image
-                img = Image.open(os.path.join(run, image_names[i]))
-                # convert to RGB
-                img = img.convert('RGB')
-                # resize the image to 224x224
-                img = img.resize((224, 224))
-                # convert the image to a tensor
-                img = transforms.ToTensor()(img)
+                    # load the image
+                    img = Image.open(os.path.join(run, image_names[i]))
+                    # convert to RGB
+                    img = img.convert('RGB')
+                    # resize the image to 224x224
+                    img = img.resize((224, 224))
+                    # convert the image to a tensor
+                    img = transforms.ToTensor()(img)
 
-                # load the text input instruction as a string
-                with open(os.path.join(run,  'label.txt'), 'r') as f:
-                    text = f.read()
+                    # load the text input instruction as a string
+                    with open(os.path.join(run,  'label.txt'), 'r') as f:
+                        text = f.read()
 
                 # load the labels from the data_out.csv file with pandas, ignore the header
                 labels = pd.read_csv(os.path.join(run, 'data_out.csv'))
@@ -174,3 +191,60 @@ class FlightILDataset(IterableDataset):
 
 def worker_init_fn(worker_id):
     worker_info = torch.utils.data.get_worker_info()
+
+def standardize(x):
+    # follow https://www.tensorflow.org/api_docs/python/tf/image/per_image_standardization
+    mean, stddev = x.mean(), x.std()
+    adjusted_stddev = max(stddev, 1.0 / np.sqrt(np.prod(x.shape)))
+    return (x - mean) / adjusted_stddev
+
+def transform_rgb(img: np.ndarray,
+                train: bool,
+                label: float = None,
+                use_standardize: bool = True,
+                use_clip_preprocess: bool = False,
+                lavis_preprocessor: str = None):
+    # need copy here probably since img is not contiguous
+    img = img.copy()
+    img = TF.to_tensor(img)
+    if train:  # perform color jitter
+        gamma_range = [0.5, 1.5]
+        brightness_range = [0.5, 1.5]
+        contrast_range = [0.3, 1.7]
+        saturation_range = [0.5, 1.5]
+
+        img = TF.adjust_gamma(img, np.random.uniform(*gamma_range))
+        img = TF.adjust_brightness(img, np.random.uniform(*brightness_range))
+        img = TF.adjust_contrast(img, np.random.uniform(*contrast_range))
+        img = TF.adjust_saturation(img, np.random.uniform(*saturation_range))
+    if use_standardize:
+        img = standardize(img)
+    if use_clip_preprocess:
+        # follow clip._transform
+        n_px = 224
+        img = TF.resize(img, n_px, interpolation=InterpolationMode.BICUBIC, antialias=True) # NOTE: resize needs to come after color jitter otherwise will cause nan
+        img = TF.center_crop(img, n_px)
+
+        img = TF.normalize(img, (0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
+    if lavis_preprocessor:
+        img = lavis_preprocessor(img)
+    return img if label is None else (img, label)
+
+# if main plot data for sequence length 10 and stride of 9
+if __name__ == '__main__':
+    # plot the 100 first yielded images on a single plot
+    import matplotlib.pyplot as plt
+
+    dataset = FlightILDataset(data_path=['/home/alex/flex/BLIP2_DATASET/train'], seq_length=10, stride=9, shuffle=False)
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=0, worker_init_fn=worker_init_fn)
+
+    fig, axs = plt.subplots(10, 10, figsize=(20, 20))
+    for i, data in enumerate(dataloader):
+        img = data[0]["image"]
+        text = data[0]["text"]
+        label = data[1]
+        axs[i // 10, i % 10].imshow(img[0].permute(1, 2, 0))
+        axs[i // 10, i % 10].set_title(text)
+        if i == 99:
+            break
+    plt.show()

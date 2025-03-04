@@ -73,7 +73,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         for dropped_key in ["net.extractor._clip_param", "net.extractor._model_param", "net.extractor._dino_param"]:
             if dropped_key in ckpt["state_dict"].keys():
                 ckpt["state_dict"].pop(dropped_key) # HACK: remove param used for determining device
-        model.load_state_dict(ckpt["state_dict"])
+        model.load_state_dict(ckpt["state_dict"], strict=False)
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = utils.instantiate_callbacks(cfg.get("callbacks"))

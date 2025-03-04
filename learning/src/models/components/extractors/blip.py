@@ -1,6 +1,9 @@
 from typing import Optional, List, Tuple
 import math
-
+import os
+import sys
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
 import numpy as np
 import torch
 import torch.nn as nn
@@ -21,7 +24,8 @@ class BLIPExtractor(BaseExtractor):
         self,
         name: str,
         model_type: str,
-        freeze_blip: bool,
+        extract_features_flag: Optional[bool] = True,
+        freeze_blip: Optional[bool] = True,
         use_low_dim_feature: Optional[bool] = False,
         use_masked_patch_wise_feature: Optional[bool] = True,
         use_visual_encoder_only: Optional[bool] = False,
@@ -37,6 +41,7 @@ class BLIPExtractor(BaseExtractor):
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
+        self.extract_features_flag = extract_features_flag
 
         ##### The following code may use internet connection/ model downloaded to torch hub directory
         model, vis_processors, txt_processors = load_model_and_preprocess(
@@ -88,63 +93,66 @@ class BLIPExtractor(BaseExtractor):
         if self.get_model_device() != device: # avoid setting device as it takes some time (~1e-3s)
             self.model.eval()
             self.model.to(device)
-
-        if self.use_masked_patch_wise_feature:
-            if self.freeze_blip:
-                with torch.no_grad():
-                    raw_out = self.extract_features(x)
-            else:
-                raw_out = self.extract_features(x)
-            features = raw_out.multimodal_embeds[:, 0] if not self.use_visual_encoder_only else raw_out.image_embeds[:, 0]
-            batch_size = x['image'].shape[0]
-            features = features.view(batch_size, -1, features.shape[-1])
-
-            if self.use_continuous_pe:
-                def _to_size(_stride): # HACK
-                    if _stride == 14:
-                        return 224 // _stride
-                    elif _stride == 7:
-                        return 224 // _stride - 1
-                    else:
-                        raise ValueError
-                fH, fW = _to_size(self.stride[0]), _to_size(self.stride[1])
-            else:
-                fH, fW = 16//self.patch_size, 16//self.patch_size # Lazy hack
-
-            # print(features.shape, fH, fW, "features shape, batch")
-
-            assert (features.shape[1] - 1) == (fH * fW)
-            global_features = features[:, 0]
-            out = features[:, 1:].view(batch_size, fH, fW, features.shape[-1])
-            out = out.permute(0, 3, 1, 2)
-            
-            if self.append_global_features:
-                out = torch.cat([out, global_features[None, :, None, None].repeat(out.shape[0], 1, out.shape[2], out.shape[3])], dim=1)
         
-        else: # embed the entire image without masking patches
-            # annoying rename issue I don't want to trace back to the source
-            x = {"image": x["image"], "text_input": x["text"]}
-            if self.freeze_blip:
-                with torch.no_grad():
+        if self.extract_features_flag:
+            if self.use_masked_patch_wise_feature:
+                if self.freeze_blip:
+                    with torch.no_grad():
+                        raw_out = self.extract_features(x)
+                else:
+                    raw_out = self.extract_features(x)
+                features = raw_out.multimodal_embeds[:, 0] if not self.use_visual_encoder_only else raw_out.image_embeds[:, 0]
+                batch_size = len(x["text"]) if isinstance(x["text"], list) else 1
+                features = features.view(batch_size, -1, features.shape[-1])
+
+                if self.use_continuous_pe:
+                    def _to_size(_stride): # HACK
+                        if _stride == 14:
+                            return 224 // _stride
+                        elif _stride == 7:
+                            return 224 // _stride - 1
+                        else:
+                            raise ValueError
+                    fH, fW = _to_size(self.stride[0]), _to_size(self.stride[1])
+                else:
+                    fH, fW = 16//self.patch_size, 16//self.patch_size # Lazy hack
+
+                # print(features.shape, fH, fW, "features shape, batch")
+
+                assert (features.shape[1] - 1) == (fH * fW)
+                global_features = features[:, 0]
+                out = features[:, 1:].view(batch_size, fH, fW, features.shape[-1])
+                out = out.permute(0, 3, 1, 2)
+                
+                if self.append_global_features:
+                    out = torch.cat([out, global_features[None, :, None, None].repeat(out.shape[0], 1, out.shape[2], out.shape[3])], dim=1)
+            
+            else: # embed the entire image without masking patches
+                # annoying rename issue I don't want to trace back to the source
+                x = {"image": x["image"], "text_input": x["text"]}
+                if self.freeze_blip:
+                    with torch.no_grad():
+                        features = self.model.extract_features(x, mode=self.mode)
+                else:
                     features = self.model.extract_features(x, mode=self.mode)
-            else:
-                features = self.model.extract_features(x, mode=self.mode)
 
-            if self.use_visual_encoder_only:
-                features = features.image_embeds if not self.use_low_dim_feature else features.image_embeds_proj
-            else:
-                features = features.multimodal_embeds
+                if self.use_visual_encoder_only:
+                    features = features.image_embeds if not self.use_low_dim_feature else features.image_embeds_proj
+                else:
+                    features = features.multimodal_embeds
 
-            if not self.all_q_dims:
-                features = features[:, 0]
-                out = features.view(1, 1, 1, features.shape[-1])
-            else:
-                # reappend the first query token to reach dimension of 36 (32 + 4, is a perfect square)
-                # torch.Size([1, 32, d]) -> torch.Size([1, 36, d]) by repeating the first query token 4 times
-                features = torch.cat([features[:, :1].repeat(1, 4, 1), features], dim=1)
-                out = features.view(1, 6, 6, features.shape[-1])
+                if not self.all_q_dims:
+                    features = features[:, 0]
+                    out = features.view(1, 1, 1, features.shape[-1])
+                else:
+                    # reappend the first query token to reach dimension of 36 (32 + 4, is a perfect square)
+                    # torch.Size([1, 32, d]) -> torch.Size([1, 36, d]) by repeating the first query token 4 times
+                    features = torch.cat([features[:, :1].repeat(1, 4, 1), features], dim=1)
+                    out = features.view(1, 6, 6, features.shape[-1])
 
-            out = out.permute(0, 3, 1, 2)
+                out = out.permute(0, 3, 1, 2)
+        else:
+            out = x["image"]
 
         if self.last_linear_layer is not None:
             out = self.last_linear_layer(out)

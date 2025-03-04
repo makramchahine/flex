@@ -16,7 +16,7 @@ seed: 42
 trainer:
   max_steps: 1000000
   limit_val_batches: 10
-  val_check_interval: 2000
+  val_check_interval: 5000
   # log_every_n_steps: 50
   strategy: ddp_spawn # NOTE: since we are using simulators for data generation and model evaluation
 
@@ -26,6 +26,7 @@ model:
 
   net:
     extractor:
+      extract_features_flag: false
       use_masked_patch_wise_feature: true
       use_visual_encoder_only: false
       patch_size: 2
@@ -40,8 +41,8 @@ model:
 
 data:
   batch_size: 32
-  num_workers: 1 # NOTE: otherwise cannot run online closed loop eval
-
+  num_workers: 23
+  load_features_directly: true
   use_standardize: false
   use_lavis_preprocess: true
   lavis_preprocess_cfg:
@@ -56,3 +57,6 @@ callbacks:
 # otherwise will cause "RuntimeError: unable to open shared memory object </torch_xxx> in read-write mode"
 # reference: https://github.com/facebookresearch/maskrcnn-benchmark/issues/103#issuecomment-785815218
 pytorch_sharing_strategy: file_system
+
+ckpt_path:
+  - /home/alex/flex/local/train_flight/LSTM_from_tensor_8x8/checkpoints/step_400000.ckpt

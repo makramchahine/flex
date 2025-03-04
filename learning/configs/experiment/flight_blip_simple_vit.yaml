@@ -26,9 +26,10 @@ model:
 
   net:
     extractor:
+      extract_features_flag: false
       use_masked_patch_wise_feature: true
       use_visual_encoder_only: false
-      patch_size: 1
+      patch_size: 2
       all_q_dims: false
       use_low_dim_feature: false
       last_linear_layer: [768, 64]
@@ -41,7 +42,7 @@ model:
 data:
   batch_size: 1
   num_workers: 1 # NOTE: otherwise cannot run online closed loop eval
-
+  load_features_directly: true
   use_standardize: false
   use_lavis_preprocess: true
   lavis_preprocess_cfg:

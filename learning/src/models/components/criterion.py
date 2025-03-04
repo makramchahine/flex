@@ -22,6 +22,8 @@ class MSECriterion(BaseCriterion):
         assert set(preds.keys()) == set(targets.keys()), \
             f"Model outputs {list(preds.keys())} is not compatible with the targets {list(targets.keys())}"
 
+        # print(preds.shape, targets.shape, 'shape test for criterion', targets)
+        # temp = input()
         losses = dict(total=0.)
         for key in targets.keys():
             loss = F.mse_loss(preds[key], targets[key], reduction=self.reduction)
