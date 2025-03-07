@@ -31,8 +31,8 @@ class LSTMPolicy(BasePolicy):
             dropout=cfg.dropout if cfg.num_layers > 1 else 0,
         )
         # final layer to return num actions
-        self.fc = nn.Linear(cfg.hidden_dim, cfg.num_classes)
-        self.fc_stop = nn.Linear(cfg.hidden_dim, 1)
+        self.fc = nn.Linear(cfg.hidden_dim, cfg.num_classes + 1)
+        # self.fc_stop = nn.Linear(cfg.hidden_dim, 1)
 
     def forward(self, x: torch.Tensor):
         
@@ -51,8 +51,8 @@ class LSTMPolicy(BasePolicy):
             # this should reset the hidden state but we reset in case
             out, _ = self.lstm(x)
 
-        out_action = self.fc(out)
-        out_stop = self.fc_stop(out)
+        out = self.fc(out)
+        # out_stop = self.fc_stop(out)
         # out_stop = torch.softmax(out_stop, dim=-1)
 
-        return out_action, out_stop
+        return out#_action, out_stop

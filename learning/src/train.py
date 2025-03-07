@@ -69,11 +69,15 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         # if its a list load the last one
         cpath = cfg.ckpt_path[0]
         print(f"Loading checkpoint: {cpath}")
-        ckpt = torch.load(cpath, map_location=device)
-        for dropped_key in ["net.extractor._clip_param", "net.extractor._model_param", "net.extractor._dino_param"]:
-            if dropped_key in ckpt["state_dict"].keys():
-                ckpt["state_dict"].pop(dropped_key) # HACK: remove param used for determining device
-        model.load_state_dict(ckpt["state_dict"], strict=False)
+        ckpt = torch.load(cpath, map_location=device, weights_only=False)
+        if cfg.ckpt_new_mode:
+            model.net.policy.load_state_dict(ckpt['state_dict']['policy'])
+            model.net.extractor.last_linear_layer.load_state_dict(ckpt['state_dict']['extractor_ll'])
+        else:
+            for dropped_key in ["net.extractor._clip_param", "net.extractor._model_param", "net.extractor._dino_param"]:
+                if dropped_key in ckpt["state_dict"].keys():
+                    ckpt["state_dict"].pop(dropped_key) # HACK: remove param used for determining device
+            model.load_state_dict(ckpt["state_dict"], strict=False)
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = utils.instantiate_callbacks(cfg.get("callbacks"))

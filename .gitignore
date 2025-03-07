@@ -39,3 +39,17 @@ inference/results/
 # Ignore pdfs and npy
 *.pdf
 *.npy
+
+random*.py
+random*.png
+flight_data_sample
+local2
+metrics_csv
+BLIP2_Features
+MCMD_Sim/results*
+zold
+random_exp
+
+
+analysis
+gym-pybullet-drones

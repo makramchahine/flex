@@ -32,6 +32,7 @@ class FlightILDataset(IterableDataset):
         self._seq_length = seq_length
         self._stride = stride
         self._load_features_directly = load_features_directly
+        self._num_last = 14
 
     def _load_data(self, run: str):
         """
@@ -69,12 +70,10 @@ class FlightILDataset(IterableDataset):
         # label is the 4 first elements of the i-th row of the labels dataframe
         label = self.cur_labels.iloc[index, :4].values
         label = np.array(label).astype(np.float32)
-        label = OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3]})
+        is_last = 1.0 if len(self.cur_labels) - index <= self._num_last else 0.0
+        label = OrderedDict({"vx": label[0], "vy": label[1], "vz": label[2], "yaw": label[3], "stop": is_last})
         return img, label
     
-    def is_last(self, is_last_seq, seq_len, cur_pos):
-        ans = 1 if is_last_seq and seq_len - cur_pos <= 5 else 0
-        return ans
 
     def __iter__(self):
         """
@@ -108,10 +107,10 @@ class FlightILDataset(IterableDataset):
                     if i >= thresh : i = thresh
                     for k in range(i, num_label):
                         img, label = self._get_image_label(run, k, im_shift)
-                        yield {"image": img, "text":text, "is_last":self.is_last(True, num_label, k)}, label
+                        yield {"image": img, "text":text}, label
                 else:
                     img, label = self._get_image_label(run, i, im_shift)
-                    yield {"image": img, "text":text, "is_last":self.is_last(True, num_label, i)}, label
+                    yield {"image": img, "text":text}, label
 
             else:
                 for run in runs:
@@ -131,7 +130,7 @@ class FlightILDataset(IterableDataset):
                                     reached_last = True
 
                                 img, label = self._get_image_label(run, data_id - 1)
-                                yield {"image": img, "text":text, "is_last":self.is_last(reached_last, self._seq_length, i)}, label
+                                yield {"image": img, "text":text}, label
                             stride_start += self._stride
                 
 

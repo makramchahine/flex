@@ -15,14 +15,14 @@ from learning.src.models.components.extractors.blip import BLIPExtractor
 from learning.src.models.components.policies.lstm import LSTMPolicy
 from learning.src.data.components.flight_il_dataset_clean import FlightILDataset
 from dataclasses import dataclass, asdict
-from torchvision import transforms
+from torchvision import transforms # type: ignore
+import argparse
 
 # ----------------- CONFIGURATION CLASS -----------------
 
-
-
+# For LSTMPolicy above. #TODO Add Dataclass for other policies
 @dataclass
-class PolicyConfig:
+class PolicyConfig: 
     channels:int = 64
     reduced_dim:int = 8
     spatial_dim:int = 8
@@ -54,14 +54,24 @@ class TrainingConfig:
     num_epochs:int = 1000
 
 @dataclass
+class InferenceConfig:
+    env_name:str = 'arena' # arena, samurai
+    obj0:str = 'red ball'
+    obj1:str = 'blue ball'
+    text_cmd:str = 'Move towards the blue ball'
+    max_step:int = 400
+    stop_thresh:float = 0.4
+
+@dataclass
 class ExperimentConfig:
     policy_cfg:PolicyConfig = PolicyConfig()
     train_cfg:TrainingConfig = TrainingConfig()
     data_cfg:DataConfig = DataConfig()
+    infer_cfg:InferenceConfig = InferenceConfig()
     mode:str = 'infer' # train, eval, infer
-    log_dir:str = f"zcheckpoints/{datetime.now().strftime('%Y_%m_%d_%H_%M')}"
-    checkpoint_path:str = '/home/alex/flex/local/train_flight/2025-03-03/13-12-23/checkpoints/step_075000.ckpt'
-    ckpt_has_policy_only:bool = False
+    log_dir:str = f"local2/{datetime.now().strftime('%Y_%m_%d_%H_%M')}"
+    checkpoint_path:str = '/home/alex/flex/local/train_flight/2025-03-06/00-09-17/checkpoints/step_625000.ckpt'
+    new_ckpt_mode:bool = True
 
     def __post_init__(self):
         os.makedirs(self.log_dir, exist_ok=True)
@@ -112,50 +122,43 @@ class E2ENet(nn.Module):
             use_visual_encoder_only= False
         )
         self.policy = policy
-        self._output_names = ['vx', 'vy', 'vz', 'yaw']
+        self._output_names = ['vx', 'vy', 'vz', 'yaw', 'stop']
         self.device = device
         self.to(device)
 
     def forward(self, x):
         x = {'image': x['image'].to(self.device), 'text':x['text']}
         z = self.extractor(x)
-        out, pred_stop = self.policy(z)
+        out = self.policy(z)
 
         out_dim = out.shape[-1]
         out = {k: out[...,i] for i, k in enumerate(self._output_names[:out_dim])}
 
-        return out, pred_stop
-    
-    def to(self, device):
-        self.extractor.to(device)
-        self.policy.to(device)
-        return super().to(device)
-    
-    def train(self):
-        self.extractor.train()
-        self.policy.train()
-    
-    def eval(self):
-        self.extractor.eval()
-        self.policy.eval()  
+        return out
     
     def save_policy(self, path):
-        torch.save(self.policy.state_dict(), path)
+        torch.save({'state_dict':{
+            'policy' : self.policy.state_dict(),
+            'extractor_ll': self.extractor.last_linear_layer.state_dict()
+        }}, path)
 
-    def load_checkpoint(self, path, has_policy_only=False):
-        if has_policy_only:
-            self.policy.load_state_dict(torch.load(path, map_location=self.device))
-        else:
-            policy_torch = torch.load(path, map_location=self.device)
-            policy_dict = {}
-            for key in self.policy.state_dict().keys():
-                policy_dict[key] = policy_torch['state_dict'][f'net.policy.{key}']
-            self.policy.load_state_dict(policy_dict)
+    def load_checkpoint(self, path, new_ckpt_mode=False):
+        ckpt_dict = torch.load(path, map_location=self.device, weights_only=False)
+        ckpt_dict = ckpt_dict['state_dict']
+        if new_ckpt_mode:
+            self.policy.load_state_dict(ckpt_dict['policy'])
+            self.extractor.last_linear_layer.load_state_dict(ckpt_dict['extractor_ll'])
+        else: 
+            # old ckpt mode used to store everything
+            self.policy.load_state_dict({
+                key: ckpt_dict[f'net.policy.{key}']
+                for key in self.policy.state_dict().keys()
+            })
 
-            extract_ll = {}
-            for key in self.extractor.last_linear_layer.state_dict().keys():
-                extract_ll[key] = policy_torch['state_dict'][f'net.extractor.last_linear_layer.{key}']
-            self.extractor.last_linear_layer.load_state_dict(extract_ll)
+            self.extractor.last_linear_layer.load_state_dict({
+                key: ckpt_dict[f'net.extractor.last_linear_layer.{key}']
+                for key in self.extractor.last_linear_layer.state_dict().keys()
+            })
 
         print(f"Checkpoint loaded: {path}")
 
@@ -163,6 +166,7 @@ class E2ENet(nn.Module):
 
 # ----------------- TRAINING FUNCTION -----------------
 def train(model, train_loader, writer, config:TrainingConfig, ckpt_path):
+    #TODO recently there are few changes, need to modify here before using
     device = config.device
     optim = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
@@ -200,9 +204,9 @@ def train(model, train_loader, writer, config:TrainingConfig, ckpt_path):
 
 # ----------------- Evaluation FUNCTION -----------------
 def evaluate(model, eval_loader, eval_path, config:TrainingConfig, max_eval_num=10):
-    device = config.device
     model.eval()
     num_eval = 0
+    plot_toggle = False
 
     # losses = {'vx': [], 'vy': [], 'vz': [], 'yaw': [], 'total': []}
     vals = {'vx': [], 'vy': [], 'vz': [], 'yaw': [], 
@@ -213,40 +217,40 @@ def evaluate(model, eval_loader, eval_path, config:TrainingConfig, max_eval_num=
         for i, data in loop:
             if num_eval >= max_eval_num: break
             x, y = data
-            pred, pred_stop = model(x)
-            vals['stop'].append(torch.sigmoid(pred_stop)[0].cpu().numpy())
-            vals['stop_y'].append(x['is_last'][0].cpu().numpy())
+            pred = model(x)
+            pred['stop'] = torch.sigmoid(pred['stop'])
             for key, value in pred.items():
                 vals[key].append(value.cpu().numpy())
                 vals[key+'_y'].append(y[key].cpu().numpy())
 
-            if x['is_last'].sum()>0:
+            if y['stop'].sum()>0 and not plot_toggle:
+                plot_toggle = True
+            if plot_toggle and y['stop'].sum() == 0:
                 num_eval += 1
+                plot_toggle = False
                 ax, fig = plt.subplots(3, 2, figsize=(15, 10))
                 for j, key in enumerate(['vx', 'vy', 'vz', 'yaw', 'stop']):
                     plt.subplot(3, 2, j+1)
-                    plt.plot(vals[key], label='pred')
-                    plt.plot(vals[key+'_y'], label='gt')
+                    plt.plot(vals[key][:-1], label='pred')
+                    plt.plot(vals[key+'_y'][:-1], label='gt')
                     plt.legend()
                     plt.title(key)
                 plt.savefig(os.path.join(eval_path, f"eval_{i}.png"))
 
                 for key in vals:
-                    vals[key] = []
+                    vals[key] = [vals[key][-1]]
 # ----------------- Infer Function -----------------
-def infer(model, infer_path):
-    import sys
-    sys.path.append('/home/alex/flex/gym-pybullet-drones')
-    from gym_pybullet_drones.examples.simulator_utils import get_x_y_z_yaw_relative_to_base_env
-    from gym_pybullet_drones.examples.simulator_eval import EvalSimulator
-    from data_collection.utils import generate_init_conditions_closed_loop_inference_2choice
+def infer(model, infer_path, infer_cfg:InferenceConfig):
+    from gym_pybullet_drones.gym_pybullet_drones.examples.simulator_utils import get_x_y_z_yaw_relative_to_base_env
+    from gym_pybullet_drones.gym_pybullet_drones.examples.simulator_eval import EvalSimulator
+    from MCMD_Sim.utils import generate_init_conditions_closed_loop_inference_2choice
     
     init_cond = generate_init_conditions_closed_loop_inference_2choice(
-        ['red ball', 'blue ball'],
+        [infer_cfg.obj0, infer_cfg.obj1],
         1,
         [infer_path]
     )
-    sim = EvalSimulator(infer_path, init_cond, 3, '0', 'arena')
+    sim = EvalSimulator(infer_path, init_cond, 3, '0', infer_cfg.env_name)
     sim.setup_simulation()
 
     vel_cmd = np.array([0,0,0,0])
@@ -256,11 +260,11 @@ def infer(model, infer_path):
     pybullet_img = pybullet_img[None, :, :, 0:3]
 
     init_forward = updated_position[0]
-    unnormalized_vel_cmds = []
-    text = 'Venture towards the blue ball in a straight line.'
+    unnormalized_cmds = []
+    text = infer_cfg.text_cmd
     pred_stops = []
     with torch.no_grad():
-        for _ in tqdm(range(200)):
+        for _ in tqdm(range(infer_cfg.max_step)):
             image = copy.deepcopy(pybullet_img)
             image = image.squeeze(0)
             image = Image.fromarray(image)
@@ -268,16 +272,16 @@ def infer(model, infer_path):
             img = transforms.ToTensor()(img).to('cuda:0')
 
             # run inference
-            preds, pred_stop = model({"image": img, "text": text})
+            preds = model({"image": img, "text": text})
             out = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
-            pred_stop = torch.sigmoid(pred_stop)
-
-            print(pred_stop, "should i stop pred?")
-            pred_stops.append(pred_stop[0].cpu().numpy())
-            unnormalized_vel_cmds.append(out[0])
             vel_cmd = out[0]
+            pred_stop = torch.sigmoid(preds['stop'])
+
+            pred_stops.append(pred_stop[0].cpu().numpy())
+            unnormalized_cmds.append([*vel_cmd, pred_stop[0].cpu().numpy().item()])
+
             updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
-            if finished or pred_stop > 0.4:
+            if finished or pred_stop > infer_cfg.stop_thresh:
                 break
             pybullet_img = pybullet_img[None, :, :, 0:3]
 
@@ -286,11 +290,16 @@ def infer(model, infer_path):
 
     with open(os.path.join(infer_path,"instruction_text.txt"), "w") as file:
         file.write(text)
+    fig, ax = plt.subplots(2, 1, figsize=(15, 10))
+    plt.subplot(2, 1, 1)
     plt.plot(pred_stops)
     plt.title('Stop Predition')
+    plt.subplot(2, 1, 2)
+    plt.plot(np.log(np.array(pred_stops)))
+    plt.title('Stop Predition Log Scale')
     plt.savefig(os.path.join(infer_path, 'pred_stop.jpg'))
     sim.export_plots()
-    np.savetxt(os.path.join(infer_path, "vel_cmds_unnorm.csv"), np.array(unnormalized_vel_cmds), delimiter=",")
+    np.savetxt(os.path.join(infer_path, "vel_cmds_unnorm.csv"), np.array(unnormalized_cmds), delimiter=",")
 
 # ----------------- MAIN EXECUTION -----------------
 if __name__ == '__main__':
@@ -304,7 +313,7 @@ if __name__ == '__main__':
     policy = LSTMPolicy(config.policy_cfg)
     model = E2ENet(policy, config.train_cfg.device)
     if config.checkpoint_path is not None:
-        model.load_checkpoint(config.checkpoint_path, config.ckpt_has_policy_only)
+        model.load_checkpoint(config.checkpoint_path, config.new_ckpt_mode)
 
     if config.mode == 'train':
         tensorboard_path = os.path.join(config.log_dir, 'tensorboard')
@@ -318,7 +327,7 @@ if __name__ == '__main__':
         model.eval()
         infer_path = os.path.join(config.log_dir, 'infer')
         os.makedirs(infer_path, exist_ok=True)
-        infer(model, infer_path)
+        infer(model, infer_path, config.infer_cfg)
     else:
         model.eval()
         config.data_cfg.seq_length = 1

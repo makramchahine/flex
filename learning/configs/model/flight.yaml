@@ -15,15 +15,17 @@ scheduler:
 
 net:
   _target_: src.models.components.e2e_net.E2ENet
-  output_names: [vx, vy, vz, yaw]
+  output_names: [vx, vy, vz, yaw, stop]
 
 criterion:
-  _target_: src.models.components.criterion.MSECriterion
+  _target_: src.models.components.criterion.FMCriterion
   weights:
     vx: 1
     vy: 1
     vz: 1
     yaw: 1
+  weights_class:
+    stop: 1
   reduction: "mean"
 
 closed_loop_eval_cfg:

@@ -59,4 +59,5 @@ callbacks:
 pytorch_sharing_strategy: file_system
 
 ckpt_path:
-  - /home/alex/flex/local/train_flight/LSTM_from_tensor_8x8/checkpoints/step_400000.ckpt
+  - /home/alex/flex/local/train_flight/2025-03-05/21-49-26/checkpoints/step_075000.ckpt
+ckpt_new_mode: true

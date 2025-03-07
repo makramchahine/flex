@@ -20,17 +20,17 @@ class E2ENet(BaseNet):
 
     def forward(self, x):
         # if the policy is not lstm
-        x = {'image': x['image'], 'text':x['text']}
+        # x = {'image': x['image'], 'text':x['text']}
         # print(x['image'].shape, x['image'].device, 'sanity_check_e2e')
         z = self.extractor(x)
         # print(torch.cuda.memory_summary(), 'sanity_test_e2e_cuda')
-        out_action, out_stop = self.policy(z)
+        out = self.policy(z)
 
-        out_dim = out_action.shape[-1]
+        out_dim = out.shape[-1]
         # assert out_dim == len(self.output_names), f"Model output of dim {out_dim} is not compatible with the target {self.output_names}"
-        out_action = {k: out_action[...,i] for i, k in enumerate(self.output_names[:out_dim])}
+        out = {k: out[...,i] for i, k in enumerate(self.output_names[:out_dim])}
 
-        return out_action, out_stop
+        return out
 
     @property
     def modalities(self):
