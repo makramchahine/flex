@@ -1,45 +1,55 @@
 import os
 import numpy as np
 from scipy.stats import norm
+from datetime import datetime
 
-from ...gym_pybullet_drones.gym_pybullet_drones import CtrlAviary, DSLPIDControl, SimplePIDControl
-from .enums import DroneModel, ImageType
-from .schemas import InitConditionsSchema
-
-from .simulator_mcmd_utils import SimUtils, SimConfig, SimLogger
-from .simulator_mcmd_obj_exp import SimObject, SimDrone
+from .pybullet_drones import CtrlAviary, DSLPIDControl, SimplePIDControl
+from .utils.enums import DroneModel, ImageType
+from .utils import SimEnvInitSchema, SimConfig, SimLogger, i2str, SimUtils
+from .components import SimObject, SimDrone
 
 class InitConditionParser:
     def __init__(self, init_conditions):
-        self.drones_height = init_conditions["start_heights"]
-        self.objs_height = init_conditions["target_heights"]
+        log_path = init_conditions.get('sim_dir', '/home/alex/flex/MCMD_Sim/results/')
+        SimConfig.log_path = os.path.join(log_path, datetime.now().strftime('%Y_%m_%d_%H_%M'))
+
         self.objs_color = init_conditions["objects_color"]
-        self.objs_rel = init_conditions["objects_relative"]
+        if 'drones_targets' in init_conditions:
+            self.drone_targets = init_conditions['drones_targets']
+            self.objs_loc = init_conditions['objects_loc']
+            self.objs_type = init_conditions['objects_type']
+            self.drones_loc = init_conditions['drones_loc']
+            self.env_name = init_conditions['env_name']
+        else:
+            self.drones_target = [{0:'to'}] 
+            #TODO
+            drones_height = init_conditions["start_heights"]
+            objs_height = init_conditions["target_heights"]
+            objs_rel = init_conditions["objects_relative"]
 
         SimConfig.theta_offset = init_conditions["theta_offset"]
         SimConfig.theta_env = init_conditions["theta_environment"]
 
 
 class MCMDSimulator: #Multiple Command Multiple Drones
-    def __init__(self, init_conditions: InitConditionsSchema, record_hz: str):
-        self.sim_dir = '' #TODO
+    def __init__(self, init_conditions: SimEnvInitSchema, record_hz: str):
         self.record_freq_hz = record_hz
         init_cond = InitConditionParser(init_conditions)
         self.objs = [
-            SimObject(loc_xy, SimConfig.theta_env, colr, height) 
-            for loc_xy, colr, height in zip(init_cond.objs_rel, init_cond.objs_color, init_cond.objs_height)
+            SimObject(loc_xy, SimConfig.theta_env, colr, obj_type) 
+            for loc_xy, colr, obj_type in zip(init_cond.objs_loc, init_cond.objs_color, init_cond.objs_type)
         ]
         self.drones = [
-            SimDrone(loc_xy, SimConfig.theta_env, SimConfig.theta_offset, height)
-            for loc_xy, height in zip([(0,0)], init_cond.drones_height)
+            SimDrone(i, loc_xy, SimConfig.theta_env, SimConfig.theta_offset)
+            for i, loc_xy in enumerate(init_cond.drones_loc)
         ]
         SimConfig.NUM_DRONES = len(self.drones)
-        self.drones_target = [{1:''}] # List of map of target indicies in self.objs to command
+        self.drones_target = init_cond.drone_targets # List of map of target indicies in self.objs to command
+        self.env_name = init_cond.env_name
         assert len(self.drones_target) == SimConfig.NUM_DRONES, 'Atleast one drone does not have target defined'
-
         
 #*---------- Trajectory Precomputation -------------------------
-    def precompute_trajectory(self, turn_only=False, random_walk=False):
+    def precompute_trajectory(self, turn_only=False, random_walk=False, export_traj=False):
         for drone_idx, sim_drone in enumerate(self.drones):
             for i, (target_idx, command) in enumerate(self.drones_target[drone_idx].items()):
                 sim_drone._setup_target(self.objs[target_idx], task=command)
@@ -51,6 +61,18 @@ class MCMDSimulator: #Multiple Command Multiple Drones
 
             if random_walk: sim_drone.add_noise_to_traj()
             sim_drone.has_precomputed_traj = True
+            if export_traj:
+                np.savetxt(
+                    os.path.join(SimConfig.log_path, f'traj{i2str(drone_idx)}.csv'),
+                    np.hstack([sim_drone.traj_pos, sim_drone.traj_rpy]),
+                    delimiter=','
+                )
+                SimLogger.plot_trajectory(
+                    SimUtils.traj2xyz_relative_to_base_env(sim_drone.traj_pos[::10], SimConfig.theta_env),
+                    sim_drone.traj_rpy[:, 2],
+                    'traj',
+                    [SimLogger.parse_obj(obj) for obj in self.objs]
+                )
             print(f'Drone_{drone_idx} trajectory computed for target_{target_idx}')
 
 #-----------------Simulation Helper Functions-----------------------------------
@@ -59,7 +81,7 @@ class MCMDSimulator: #Multiple Command Multiple Drones
         self.env._exportImage(
             img_type=ImageType.RGB,
             img_input=rgb,
-            path=self.sim_dir + f"/pybullet_pics{drone_index}",
+            path=os.path.join(SimConfig.log_path, f'pybullet_pics{i2str(drone_index)}'),
             frame_num=int(self.simulation_counter),
         )
     def set_num_steps_until_record(self, hz):
@@ -85,7 +107,7 @@ class MCMDSimulator: #Multiple Command Multiple Drones
     def setup_simulation(self, mode='collect', env_name='arena'):
         objs_details = {"colors": [], "locations": []}
         for obj in self.objs:
-            objs_details['colors'].append(obj.colr)
+            objs_details['colors'].append(f'{obj.colr} {obj.obj_type}')
             objs_details['locations'].append(obj.loc_abs)
 
         AGGR_PHY_STEPS = int(SimConfig.SIMULATION_FREQ_HZ / SimConfig.CONTROL_FREQ_HZ) if SimConfig.AGGREGATE else 1
@@ -121,7 +143,6 @@ class MCMDSimulator: #Multiple Command Multiple Drones
     def __setup_control(self):
         PIDControl = DSLPIDControl if SimConfig.DRONE_MODEL in [DroneModel.CF2X, DroneModel.CF2P] else SimplePIDControl #[DroneModel.HB]
         self.ctrl = [PIDControl(drone_model=SimConfig.DRONE_MODEL) for _ in range(SimConfig.NUM_DRONES)]
-
         #! Simulation Params
         self.CTRL_EVERY_N_STEPS = int(np.floor(self.env.SIM_FREQ / SimConfig.CONTROL_FREQ_HZ)) # 1
         self.action = {str(i): np.array([0, 0, 0, 0]) for i in range(SimConfig.NUM_DRONES)}
@@ -133,7 +154,6 @@ class MCMDSimulator: #Multiple Command Multiple Drones
                 num_active_drones += 1
                 steps = int(self.CTRL_EVERY_N_STEPS * sim_drone.traj_pos.shape[0])
                 self.STEPS.append(steps)
-                os.makedirs(os.path.join(self.sim_dir, f"pybullet_pics{i}"), exist_ok=True)
                 self.export_snap(i)
 
         assert len(self.drones) == num_active_drones, 'Atleast one drone does not have computed trajectory'
@@ -188,14 +208,16 @@ class MCMDSimulator: #Multiple Command Multiple Drones
         return obs
     
 #------------------------------Simulation All in one run code ---------------------------
-    def run_simulation_to_completion(self, turn_only=False, random_walk=False):
+    def run_simulation_to_completion(self, env_name='arena', turn_only=False, random_walk=False):
         """ Creates training images with the stored trajectory """
-        assert self.mode == 'collab', 'Simulator is not setup with collect mode'
-        self.precompute_trajectory(turn_only=turn_only, random_walk=random_walk)
-        self.setup_simulation()
+        # assert self.mode == 'collect', 'Simulator is not setup with collect mode'
+        self.precompute_trajectory(turn_only=turn_only, random_walk=random_walk, export_traj=True)
+        self.setup_simulation(mode='collect', env_name=env_name)
 
         while not self.check_exausted_steps():
             obs = self.__step_simulation()
             self.logger.log_obs(obs)
             self.logger.log_action(self.action)
         self.env.close()
+
+        self.logger.export_plots()

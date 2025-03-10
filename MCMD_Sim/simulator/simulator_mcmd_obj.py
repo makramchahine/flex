@@ -2,7 +2,7 @@ import random
 import numpy as np
 from collections import deque
 
-from .simulator_mcmd_utils import SimUtils, SimConfig
+from .utils.mcmd_utils import SimUtils, SimConfig
 
 CRITICAL_DIST = 0.5
 CRITICAL_DIST_BUFFER = 0.1

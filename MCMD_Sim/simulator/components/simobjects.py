@@ -1,8 +1,8 @@
+import os
 import random
 import numpy as np
 from collections import deque
-
-from .simulator_mcmd_utils import SimUtils, SimConfig
+from ..utils import SimUtils, SimConfig, i2str
 
 CRITICAL_DIST = 0.5
 CRITICAL_DIST_BUFFER = 0.1
@@ -12,19 +12,20 @@ FINISH_COUNTER_THRESHOLD = 32
 ATF = 64 * SimConfig.SIMULATION_FREQ_HZ / CONTROL_STEP_NORMALIZATION #Approx Total Frame
 
 class SimObject:
-    def __init__(self, loc_rel, theta, colr=None, height=None):
-        if height is None:
-            assert len(loc_rel) == 3, 'missing height information'
-        else:
-            loc_rel = (loc_rel[0], loc_rel[1], height)
+    def __init__(self, loc_rel, theta, colr=None, obj_type=None):
+        assert len(loc_rel) == 3, 'Expected relative location in xyz coordinate'
         self.loc_rel = loc_rel
         self.loc_abs = SimUtils.convert_to_global(loc_rel, theta)
         self.colr = colr
         self.theta = theta
+        self.obj_type = obj_type
 
 class SimDrone(SimObject):
-    def __init__(self, loc_rel, theta, theta_offset, height, target_obj=None):
-        super().__init__(loc_rel, theta, height=height)
+    def __init__(self, drone_id, loc_rel, theta, theta_offset, target_obj=None):
+        super().__init__(loc_rel, theta, obj_type='drone')
+        self.idx = drone_id
+        os.makedirs(os.path.join(SimConfig.log_path, f'pybullet_pics{i2str(drone_id)}'), exist_ok=True)
+        
         if target_obj is not None: self._setup_target(target_obj)
         self.traj_pos = [[*self.loc_abs]]
         self.traj_rpy = [[0, 0, theta + theta_offset]]
@@ -41,7 +42,7 @@ class SimDrone(SimObject):
         self.critical_dist = CRITICAL_DIST
         self.critical_dist_dest = CRITICAL_DIST * 0.1
         self.critical_dist_buffer = CRITICAL_DIST_BUFFER
-        
+
     def _setup_target(self, target_obj:SimObject, task=None):
         self.target = target_obj
         self.destination = (target_obj.loc_rel[0] + 1.0, target_obj.loc_rel[1] - 1.0, target_obj.loc_abs[2])
@@ -74,71 +75,24 @@ class SimDrone(SimObject):
         """ Holds still for one second of simulation """
         assert hasattr(self, 'target'), 'Drone does not have any target'
         for _ in range(SimConfig.SIMULATION_FREQ_HZ):
-            self.__step_trajectory(hold=True)
+            self._step_trajectory(hold=True)
 
     def _compute_trajectory(self, turn_only):
         assert hasattr(self, 'target'), 'Drone does not have any target'
         if turn_only:
             for _ in range(240 * 8):
-                self.__step_trajectory(turn_only=True)
+                self._step_trajectory(turn_only=True)
         else:
             done = False
             while not done:
                 # done = self.has_dist_converged()
-                self.__step_trajectory()
+                self._step_trajectory()
                 if self.reached_critical:
                     self.finish_counter += 1
                     done = self.finish_counter > FINISH_COUNTER_THRESHOLD * 30
                 done = done or self.frame_counter > ATF
 
-    def __step_trajectory(self, hold=False, turn_only=False, turn_mode=False):
-        """
-        Uses a parametric curve to determine the next step, ensuring the drone moves 
-        smoothly towards self.destination while staying close to a critical sphere around self.target.
-        """
-        if hold or turn_only or turn_mode: 
-            return self.__step_trajectory2(hold=hold, turn_only=turn_only, turn_mode=turn_mode)
-
-        P0 = np.array(self.traj_pos[-1])
-        lyaw = self.traj_rpy[-1][2] 
-        yaw_dist = SimUtils.signed_angular_distance(lyaw, self.final_theta + SimConfig.theta_env)
-
-        Pd = np.array(self.destination)
-        Pt = np.array(self.target.loc_abs)
-        rc = self.critical_dist  # Radius of sphere around target
-        soft_rc = rc + np.clip(np.random.randn() * 0.05, -0.05, 0.05)
-
-        direction = Pd - P0
-        dist_dest = np.linalg.norm(direction) 
-        direction /= dist_dest
-
-        midpoint = (P0 + Pd) / 2  
-        projected = Pt + soft_rc * (midpoint - Pt) / np.linalg.norm(midpoint - Pt)
-
-        def bezier_curve(t):
-            return (1 - t)**2 * P0 + 2 * (1 - t) * t * projected + t**2 * Pd
-
-        t_step = dist_dest / (6000 - self.frame_counter)#0.0002
-        next_pos = bezier_curve(t_step)
-
-        new_theta = self.init_theta
-        if dist_dest > self.critical_dist_dest and not self.reached_critical:
-            yaw_speed = self._get_adj_speed(yaw_dist, 'yaw')
-            new_theta = self.final_theta + SimConfig.theta_env if abs(yaw_dist) < SimConfig.APPROX_CORRECT_YAW else lyaw + yaw_speed
-            if dist_dest - self.critical_dist_dest > self.critical_dist_buffer:
-                self.final_theta = SimUtils.angle_between_two_points(self.traj_pos[-1][:2], self.target.loc_abs[:2]) - SimConfig.theta_env
-        else:
-            self.reached_critical = True
-            yaw_speed = SimConfig.DEFAULT_SEARCHING_YAW * np.sign(yaw_dist) / SimConfig.CONTROL_FREQ_HZ
-            new_theta = lyaw + yaw_speed
-
-        self.traj_pos.append(next_pos.tolist())
-        self.traj_rpy.append([0, 0, new_theta])
-
-        self.frame_counter += 1
-        return np.linalg.norm(Pd - next_pos) 
-    
-    def __step_trajectory2(self, hold=False, turn_only=False, turn_mode=False):
+    def _step_trajectory(self, hold=False, turn_only=False, turn_mode=False):
         """
         Modifies:
             self.traj_pos, self.traj_rpy, self.final_theta, self.reached_critical
@@ -219,6 +173,14 @@ class SimDrone(SimObject):
 
         return yaw_speed, lift_speed
     
+
+    def has_dist_converged(self, tol=1e-4):
+        if len(self.dist_buffer) < self.dist_buffer.maxlen:
+            return False
+
+        diffs = np.abs(np.diff(self.dist_buffer))
+        return np.all(diffs < tol)
+
     def add_noise_to_traj(self):
         new_mean = 0 #random.uniform(-0.15, 0.15)
         xyz_noise_matrix = np.random.normal(0, 0.01, size=(3, self.checkpoint_frame))
@@ -228,10 +190,3 @@ class SimDrone(SimObject):
 
         self.traj_pos[:self.checkpoint_frame, 0:3] += xyz_noise_matrix.T
         self.traj_rpy[:self.checkpoint_frame, 2] += yaw_noise_matrix[0].T
-
-    def has_dist_converged(self, tol=1e-4):
-        if len(self.dist_buffer) < self.dist_buffer.maxlen:
-            return False
-
-        diffs = np.abs(np.diff(self.dist_buffer))
-        return np.all(diffs < tol)

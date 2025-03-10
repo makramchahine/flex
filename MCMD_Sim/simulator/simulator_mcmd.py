@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 from ...gym_pybullet_drones.gym_pybullet_drones import CtrlAviary, DSLPIDControl, SimplePIDControl, Logger
-from .enums import DroneModel, ImageType
-from .schemas import InitConditionsSchema
+from .utils.enums import DroneModel, ImageType
+from .utils.schemas import InitConditionsSchema
 
-from .simulator_mcmd_utils import SimUtils, SimConfig
+from .utils.mcmd_utils import SimUtils, SimConfig
 from .simulator_mcmd_obj import SimObject, SimDrone
 
 class InitConditionParser:
