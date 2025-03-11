@@ -11,6 +11,15 @@ CONTROL_STEP_NORMALIZATION = 3
 FINISH_COUNTER_THRESHOLD = 32
 ATF = 64 * SimConfig.SIMULATION_FREQ_HZ / CONTROL_STEP_NORMALIZATION #Approx Total Frame
 
+task_2_delta = {
+    'to': np.array([0.0, 0.0, 0.0]),
+    'left': np.array([0.0, 1.0, 0.0]),
+    'right': np.array([0.7, -1.0, 0]),
+    'up': np.array([0, 0, 1.0]),
+    'down': np.array([0, 0, -1.0]),
+    'behind': np.array([1.0, 0, 0])
+}
+
 class SimObject:
     def __init__(self, loc_rel, theta, colr=None, obj_type=None):
         assert len(loc_rel) == 3, 'Expected relative location in xyz coordinate'
@@ -43,11 +52,21 @@ class SimDrone(SimObject):
         self.critical_dist_dest = CRITICAL_DIST * 0.1
         self.critical_dist_buffer = CRITICAL_DIST_BUFFER
 
-    def _setup_target(self, target_obj:SimObject, task=None):
+    def _setup_target(self, target_obj:SimObject, tasks=None):
         self.target = target_obj
-        self.destination = (target_obj.loc_rel[0] + 1.0, target_obj.loc_rel[1] - 1.0, target_obj.loc_abs[2])
-        print(target_obj.colr, self.destination, 'target locked')
-        self.task = task
+        tasks = tasks.split('_')
+        self.tasks = tasks
+
+        delta = np.array([0.0, 0.0, 0.0])
+        for task in tasks:
+            delta += task_2_delta[task] * random.uniform(0.3, 0.6)
+        self.destination = (
+            target_obj.loc_rel[0] + delta[0], 
+            target_obj.loc_rel[1] + delta[1], 
+            target_obj.loc_rel[2] + delta[2]
+        )
+        text_out = f"Target locked on {target_obj.colr} at {target_obj.loc_rel}. Destination {self.destination}"
+
         self.init_theta = self.traj_rpy[-1][-1]
         loc_rel = SimUtils.convert_to_relative(self.traj_pos[-1][:2], self.theta)
         self.final_theta = SimUtils.angle_between_two_points(loc_rel[:2], target_obj.loc_rel[:2])
@@ -70,6 +89,8 @@ class SimDrone(SimObject):
         self.reached_critical = False
         self.dist_buffer = deque(maxlen=5)
         self.destination = SimUtils.convert_to_global(self.destination, target_obj.theta)
+
+        return text_out
 
     def _init_stable_trajectory(self):
         """ Holds still for one second of simulation """

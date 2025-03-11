@@ -44,15 +44,18 @@ class MCMDSimulator: #Multiple Command Multiple Drones
             for i, loc_xy in enumerate(init_cond.drones_loc)
         ]
         SimConfig.NUM_DRONES = len(self.drones)
-        self.drones_target = init_cond.drone_targets # List of map of target indicies in self.objs to command
+        self.drones_target = [{1:'right'}]#init_cond.drone_targets # List of map of target indicies in self.objs to command
         self.env_name = init_cond.env_name
         assert len(self.drones_target) == SimConfig.NUM_DRONES, 'Atleast one drone does not have target defined'
         
 #*---------- Trajectory Precomputation -------------------------
     def precompute_trajectory(self, turn_only=False, random_walk=False, export_traj=False):
         for drone_idx, sim_drone in enumerate(self.drones):
+            all_tasks_text = ''
             for i, (target_idx, command) in enumerate(self.drones_target[drone_idx].items()):
-                sim_drone._setup_target(self.objs[target_idx], task=command)
+                text_out = sim_drone._setup_target(self.objs[target_idx], tasks=command)
+                all_tasks_text += f"Fly {command} of {self.objs[target_idx].colr} {self.objs[target_idx].obj_type}\n{text_out}\n"
+                print(text_out)
                 if i == 0: sim_drone._init_stable_trajectory()
                 sim_drone._compute_trajectory(turn_only)
 
@@ -61,6 +64,8 @@ class MCMDSimulator: #Multiple Command Multiple Drones
 
             if random_walk: sim_drone.add_noise_to_traj()
             sim_drone.has_precomputed_traj = True
+            with open(os.path.join(SimConfig.log_path, 'instructions.txt'), 'w', encoding='utf-8') as f:
+                f.write(all_tasks_text)
             if export_traj:
                 np.savetxt(
                     os.path.join(SimConfig.log_path, f'traj{i2str(drone_idx)}.csv'),
@@ -68,7 +73,7 @@ class MCMDSimulator: #Multiple Command Multiple Drones
                     delimiter=','
                 )
                 SimLogger.plot_trajectory(
-                    SimUtils.traj2xyz_relative_to_base_env(sim_drone.traj_pos[::10], SimConfig.theta_env),
+                    SimUtils.traj2xyz_relative_to_base_env(sim_drone.traj_pos[::25], SimConfig.theta_env),
                     sim_drone.traj_rpy[:, 2],
                     'traj',
                     [SimLogger.parse_obj(obj) for obj in self.objs]
@@ -221,3 +226,5 @@ class MCMDSimulator: #Multiple Command Multiple Drones
         self.env.close()
 
         self.logger.export_plots()
+
+        return SimConfig.log_path

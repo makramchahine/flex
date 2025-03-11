@@ -12,7 +12,7 @@ class BezierSimDrone(SimDrone):
         smoothly towards self.destination while staying close to a critical sphere around self.target.
         """
         if hold or turn_only or turn_mode: 
-            return self.__step_trajectory2(hold=hold, turn_only=turn_only, turn_mode=turn_mode)
+            return super()._step_trajectory(hold=hold, turn_only=turn_only, turn_mode=turn_mode)
 
         P0 = np.array(self.traj_pos[-1])
         lyaw = self.traj_rpy[-1][2] 
@@ -20,11 +20,12 @@ class BezierSimDrone(SimDrone):
 
         Pd = np.array(self.destination)
         Pt = np.array(self.target.loc_abs)
-        rc = self.critical_dist  # Radius of sphere around target
+        rc = self.critical_dist + self.critical_dist_buffer  # Radius of sphere around target
         soft_rc = rc + np.clip(np.random.randn() * 0.05, -0.05, 0.05)
 
         direction = Pd - P0
-        dist_dest = np.linalg.norm(direction) 
+        dist_dest = np.linalg.norm(direction)
+        dist_target = np.linalg.norm(Pt - P0)
         direction /= dist_dest
 
         midpoint = (P0 + Pd) / 2  
@@ -37,10 +38,10 @@ class BezierSimDrone(SimDrone):
         next_pos = bezier_curve(t_step)
 
         new_theta = self.init_theta
-        if dist_dest > self.critical_dist_dest and not self.reached_critical:
+        if dist_dest > self.critical_dist_dest and dist_target > self.critical_dist and not self.reached_critical:
             yaw_speed = self._get_adj_speed(yaw_dist, 'yaw')
             new_theta = self.final_theta + SimConfig.theta_env if abs(yaw_dist) < SimConfig.APPROX_CORRECT_YAW else lyaw + yaw_speed
-            if dist_dest - self.critical_dist_dest > self.critical_dist_buffer:
+            if dist_target - self.critical_dist_dest > self.critical_dist_buffer:
                 self.final_theta = SimUtils.angle_between_two_points(self.traj_pos[-1][:2], self.target.loc_abs[:2]) - SimConfig.theta_env
         else:
             self.reached_critical = True
