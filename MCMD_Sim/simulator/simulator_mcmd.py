@@ -113,7 +113,7 @@ class MCMDSimulator: #Multiple Command Multiple Drones
             custom_obj_location=objs_details,
             env_name=self.env_name
         )
-        self.env.IMG_RES = np.array([256, 144])
+        self.env.IMG_RES = np.array([224, 224])
         self.env.reset()
 
         PIDControl = DSLPIDControl if drone in [DroneModel.CF2X, DroneModel.CF2P] else SimplePIDControl #[DroneModel.HB]

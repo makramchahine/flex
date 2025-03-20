@@ -55,10 +55,11 @@ class TrainingConfig:
 
 @dataclass
 class InferenceConfig:
-    env_name:str = 'arena' # arena, samurai
+    env_name:str = 'samurai' # arena, samurai
     obj0:str = 'red ball'
     obj1:str = 'blue ball'
-    text_cmd:str = 'Move towards the blue ball'
+    target_idx:int = 1
+    text_cmd:str = 'right'
     max_step:int = 400
     stop_thresh:float = 0.4
 
@@ -70,16 +71,16 @@ class ExperimentConfig:
     infer_cfg:InferenceConfig = InferenceConfig()
     mode:str = 'infer' # train, eval, infer
     log_dir:str = f"local2/{datetime.now().strftime('%Y_%m_%d_%H_%M')}"
-    checkpoint_path:str = '/home/alex/flex/local/train_flight/2025-03-06/00-09-17/checkpoints/step_625000.ckpt'
+    checkpoint_path:str = '/home/alex/flex/local/train_flight/2025-03-20/13-52-20/checkpoints/step_025000.ckpt'
     new_ckpt_mode:bool = True
 
     def __post_init__(self):
-        os.makedirs(self.log_dir, exist_ok=True)
         self.policy_cfg.single_step = self.mode != 'train'
 
-    def json_dump(self):
+    def json_dump(self, log_dir=None):
+        if log_dir is None: log_dir = self.log_dir
         self.train_cfg.device = str(self.train_cfg.device)
-        with open(os.path.join(self.log_dir, 'experiment_config.json'), "w") as f:
+        with open(os.path.join(log_dir, 'experiment_config.json'), "w") as f:
             json.dump(asdict(self), f, indent=4)
         self.train_cfg.device = torch.device(self.train_cfg.device)
 
@@ -241,55 +242,58 @@ def evaluate(model, eval_loader, eval_path, config:TrainingConfig, max_eval_num=
                     vals[key] = [vals[key][-1]]
 # ----------------- Infer Function -----------------
 def infer(model, infer_path, infer_cfg:InferenceConfig):
-    from gym_pybullet_drones.gym_pybullet_drones.examples.simulator_utils import get_x_y_z_yaw_relative_to_base_env
-    from gym_pybullet_drones.gym_pybullet_drones.examples.simulator_eval import EvalSimulator
-    from MCMD_Sim.utils import generate_init_conditions_closed_loop_inference_2choice
+    """
+    Runs inference on a policy model and controls a simulator to follow the instructions.
+
+    Args:
+        model: The policy model to run inference on.
+        infer_path: The path to save the output images and plots.
+        infer_cfg: The config for the inference, including the environment name, instruction text,
+            and max steps to run.
+    """
+    from MCMD_Sim.simulator.simulator_mcmd_exp import MCMDSimEval
+    from MCMD_Sim.simulator.utils import generate_closed_loop_1drone_2ball_env_init, generate_instruction
+
+    sim_objs = [infer_cfg.obj0, infer_cfg.obj1]
     
-    init_cond = generate_init_conditions_closed_loop_inference_2choice(
-        [infer_cfg.obj0, infer_cfg.obj1],
-        1,
-        [infer_path]
+    init_cond = generate_closed_loop_1drone_2ball_env_init(
+        env_name=infer_cfg.env_name,
+        command=infer_cfg.text_cmd,
+        target_idx=infer_cfg.target_idx,
+        objs = sim_objs,
+        log_path=os.path.join(infer_path, 'infer_log'),
+        data_path=os.path.join(infer_path, 'infer_data')
     )
-    sim = EvalSimulator(infer_path, init_cond, 3, '0', infer_cfg.env_name)
-    sim.setup_simulation()
+    target = sim_objs[infer_cfg.target_idx].split(" ")
+    text = generate_instruction(*target, infer_cfg.text_cmd)
 
-    vel_cmd = np.array([0,0,0,0])
-    sim.vel_cmd_world = vel_cmd
-    updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
-    updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
-    pybullet_img = pybullet_img[None, :, :, 0:3]
+    sim = MCMDSimEval(init_cond, 3)
 
-    init_forward = updated_position[0]
-    unnormalized_cmds = []
-    text = infer_cfg.text_cmd
+    vel_cmd = np.array([[0,0,0,0]])
+    image = sim.step_action(vel_cmd)[0]
     pred_stops = []
     with torch.no_grad():
-        for _ in tqdm(range(infer_cfg.max_step)):
-            image = copy.deepcopy(pybullet_img)
-            image = image.squeeze(0)
+        for iter in tqdm(range(infer_cfg.max_step)):
             image = Image.fromarray(image)
             img = image.resize((224, 224))
             img = transforms.ToTensor()(img).to('cuda:0')
+            # text = 'zoom in on the blue ball'
 
-            # run inference
             preds = model({"image": img, "text": text})
-            out = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
-            vel_cmd = out[0]
             pred_stop = torch.sigmoid(preds['stop'])
-
             pred_stops.append(pred_stop[0].cpu().numpy())
-            unnormalized_cmds.append([*vel_cmd, pred_stop[0].cpu().numpy().item()])
 
-            updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
-            if finished or pred_stop > infer_cfg.stop_thresh:
+            vel_cmd = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
+            image = sim.step_action(vel_cmd)
+            image = image[0]
+
+            if pred_stop > infer_cfg.stop_thresh and iter > 30:
                 break
-            pybullet_img = pybullet_img[None, :, :, 0:3]
 
-            updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
-            updated_position -= [init_forward, 0, 0.6, sim.theta_environment]
-
-    with open(os.path.join(infer_path,"instruction_text.txt"), "w") as file:
+    log_dir = sim.close()
+    with open(os.path.join(log_dir, "instruction_text.txt"), "w") as file:
         file.write(text)
+
     fig, ax = plt.subplots(2, 1, figsize=(15, 10))
     plt.subplot(2, 1, 1)
     plt.plot(pred_stops)
@@ -297,15 +301,13 @@ def infer(model, infer_path, infer_cfg:InferenceConfig):
     plt.subplot(2, 1, 2)
     plt.plot(np.log(np.array(pred_stops)))
     plt.title('Stop Predition Log Scale')
-    plt.savefig(os.path.join(infer_path, 'pred_stop.jpg'))
-    sim.export_plots()
-    np.savetxt(os.path.join(infer_path, "vel_cmds_unnorm.csv"), np.array(unnormalized_cmds), delimiter=",")
+    plt.savefig(os.path.join(log_dir, 'pred_stop.jpg'))
+    return log_dir
 
 # ----------------- MAIN EXECUTION -----------------
 if __name__ == '__main__':
     # Initialize Configuration
     config = ExperimentConfig()
-    config.json_dump()
     # torch.save(config, os.path.join(config.log_dir, "experiment_config.pth"))
     set_seed(config.train_cfg.seed_value)
     
@@ -318,6 +320,7 @@ if __name__ == '__main__':
     if config.mode == 'train':
         tensorboard_path = os.path.join(config.log_dir, 'tensorboard')
         os.makedirs(tensorboard_path, exist_ok=True)
+        config.json_dump()
         writer = SummaryWriter(log_dir=tensorboard_path)
         model.train()
         train_loader = get_data_loader(config.data_cfg)
@@ -325,16 +328,82 @@ if __name__ == '__main__':
         writer.close()
     elif config.mode == 'infer':
         model.eval()
-        infer_path = os.path.join(config.log_dir, 'infer')
-        os.makedirs(infer_path, exist_ok=True)
-        infer(model, infer_path, config.infer_cfg)
+        infer_path = os.path.join(config.log_dir, '..')
+        log_dir = infer(model, infer_path, config.infer_cfg)
+        config.json_dump(log_dir)
     else:
+        eval_path = os.path.join(config.log_dir, 'eval')
+        os.makedirs(eval_path, exist_ok=True)
+        config.json_dump()
         model.eval()
         config.data_cfg.seq_length = 1
         config.data_cfg.stride = 1
         config.data_cfg.batch_size = 1
         config.data_cfg.shuffle = False
         eval_loader = get_data_loader(config.data_cfg, mode_train=False)
-        eval_path = os.path.join(config.log_dir, 'eval')
-        os.makedirs(eval_path, exist_ok=True)
         evaluate(model, eval_loader, eval_path, config.train_cfg)
+
+
+
+# def infer(model, infer_path, infer_cfg:InferenceConfig):
+#     import sys
+#     sys.path.append('/home/alex/flex/gym_pybullet_drones')
+#     from gym_pybullet_drones.examples.simulator_utils import get_x_y_z_yaw_relative_to_base_env
+#     from gym_pybullet_drones.examples.simulator_eval import EvalSimulator
+#     from MCMD_Sim.utils import generate_init_conditions_closed_loop_inference_2choice
+    
+#     init_cond = generate_init_conditions_closed_loop_inference_2choice(
+#         [infer_cfg.obj0, infer_cfg.obj1],
+#         1,
+#         [infer_path]
+#     )
+#     sim = EvalSimulator(infer_path, init_cond, 3, '0', infer_cfg.env_name)
+#     sim.setup_simulation()
+
+#     vel_cmd = np.array([0,0,0,0])
+#     sim.vel_cmd_world = vel_cmd
+#     updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
+#     updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
+#     pybullet_img = pybullet_img[None, :, :, 0:3]
+
+#     init_forward = updated_position[0]
+#     unnormalized_cmds = []
+#     text = infer_cfg.text_cmd
+#     pred_stops = []
+#     with torch.no_grad():
+#         for _ in tqdm(range(infer_cfg.max_step)):
+#             image = copy.deepcopy(pybullet_img)
+#             image = image.squeeze(0)
+#             image = Image.fromarray(image)
+#             img = image.resize((224, 224))
+#             img = transforms.ToTensor()(img).to('cuda:0')
+
+#             # run inference
+#             preds = model({"image": img, "text": text})
+#             out = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
+#             vel_cmd = out[0]
+#             pred_stop = torch.sigmoid(preds['stop'])
+
+#             pred_stops.append(pred_stop[0].cpu().numpy())
+#             unnormalized_cmds.append([*vel_cmd, pred_stop[0].cpu().numpy().item()])
+
+#             updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
+#             if finished or pred_stop > infer_cfg.stop_thresh:
+#                 break
+#             pybullet_img = pybullet_img[None, :, :, 0:3]
+
+#             updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
+#             updated_position -= [init_forward, 0, 0.6, sim.theta_environment]
+
+#     with open(os.path.join(infer_path,"instruction_text.txt"), "w") as file:
+#         file.write(text)
+#     fig, ax = plt.subplots(2, 1, figsize=(15, 10))
+#     plt.subplot(2, 1, 1)
+#     plt.plot(pred_stops)
+#     plt.title('Stop Predition')
+#     plt.subplot(2, 1, 2)
+#     plt.plot(np.log(np.array(pred_stops)))
+#     plt.title('Stop Predition Log Scale')
+#     plt.savefig(os.path.join(infer_path, 'pred_stop.jpg'))
+#     sim.export_plots()
+#     np.savetxt(os.path.join(infer_path, "vel_cmds_unnorm.csv"), np.array(unnormalized_cmds), delimiter=",")

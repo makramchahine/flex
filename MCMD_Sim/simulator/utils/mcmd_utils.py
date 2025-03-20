@@ -36,6 +36,7 @@ class SimConfig:
     theta_offset = None
     theta_env = None
     log_path = None
+    data_path = None
 
 
 class SimUtils:
@@ -96,6 +97,14 @@ class SimUtils:
         rel_vy = -global_vx * np.sin(yaw) + global_vy * np.cos(yaw)
 
         return np.array([rel_vx, rel_vy, state[12], state[15]])
+    
+    @staticmethod
+    def convert_vel_cmd_to_world_frame(vel_cmd, yaw):
+        # convert from body_frame to world_frame
+        vel_cmd_world = vel_cmd.copy()
+        vel_cmd_world[0] = vel_cmd[0] * np.cos(-yaw) + vel_cmd[1] * np.sin(-yaw)
+        vel_cmd_world[1] = -vel_cmd[0] * np.sin(-yaw)+ vel_cmd[1] * np.cos(-yaw)
+        return vel_cmd_world
 
     @staticmethod
     def get_relative_displacement(later_state, earlier_state, environment_theta):

@@ -2,7 +2,7 @@ import random
 import numpy as np
 
 from ..utils import SimUtils, SimConfig
-from .simobjects import SimDrone
+from .simobjects import SimDrone, ATF
 
 
 class BezierSimDrone(SimDrone):
@@ -31,14 +31,12 @@ class BezierSimDrone(SimDrone):
         midpoint = (P0 + Pd) / 2  
         projected = Pt + soft_rc * (midpoint - Pt) / np.linalg.norm(midpoint - Pt)
 
-        def bezier_curve(t):
-            return (1 - t)**2 * P0 + 2 * (1 - t) * t * projected + t**2 * Pd
+        t_step = dist_dest / (ATF + 800 - self.frame_counter)#0.0002
+        next_pos = (1 - t_step)**2 * P0 + 2 * (1 - t_step) * t_step * projected + t_step**2 * Pd
 
-        t_step = dist_dest / (6000 - self.frame_counter)#0.0002
-        next_pos = bezier_curve(t_step)
 
         new_theta = self.init_theta
-        if dist_dest > self.critical_dist_dest and dist_target > self.critical_dist and not self.reached_critical:
+        if dist_dest > self.critical_dist_dest:# and dist_target > self.critical_dist and not self.reached_critical:
             yaw_speed = self._get_adj_speed(yaw_dist, 'yaw')
             new_theta = self.final_theta + SimConfig.theta_env if abs(yaw_dist) < SimConfig.APPROX_CORRECT_YAW else lyaw + yaw_speed
             if dist_target - self.critical_dist_dest > self.critical_dist_buffer:

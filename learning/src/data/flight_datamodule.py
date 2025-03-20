@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional, List
-from omegaconf import DictConfig
+from omegaconf import DictConfig # type: ignore
 import os
-from lightning import LightningDataModule
+from lightning import LightningDataModule # type: ignore
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -13,6 +13,7 @@ class FlightDataModule(LightningDataModule):
             load_features_directly: Optional[bool] = False,
             shuffle: Optional[bool] = True,
             mode: Optional[str] = "IL",
+            flag_last_num: Optional[int] = 5,
             buffer_size: Optional[int] = 1,
             snippet_size: Optional[int] = 100,
             batch_size: int = 64,
@@ -34,6 +35,7 @@ class FlightDataModule(LightningDataModule):
         self.eval_data_path = eval_data_path[0]
         self.load_features_directly = load_features_directly
         self._shuffle = shuffle
+        self._flag_last_num = flag_last_num
 
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
@@ -68,7 +70,8 @@ class FlightDataModule(LightningDataModule):
             use_clip_preprocess=self.hparams.use_clip_preprocess,
             use_lavis_preprocess=self.hparams.use_lavis_preprocess,
             lavis_preprocess_cfg=self.hparams.lavis_preprocess_cfg,
-            load_features_directly=self.hparams.load_features_directly
+            load_features_directly=self.hparams.load_features_directly,
+            flag_last_num=self.hparams.flag_last_num
         )
 
         return dataset, worker_init_fn

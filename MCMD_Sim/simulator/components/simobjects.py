@@ -9,16 +9,7 @@ CRITICAL_DIST_BUFFER = 0.1
 TARGET_NUM_TIMESTEPS_TO_CRITICAL = (55, 90) # this affects the rate of drone control recovery
 CONTROL_STEP_NORMALIZATION = 3
 FINISH_COUNTER_THRESHOLD = 32
-ATF = 64 * SimConfig.SIMULATION_FREQ_HZ / CONTROL_STEP_NORMALIZATION #Approx Total Frame
-
-task_2_delta = {
-    'to': np.array([0.0, 0.0, 0.0]),
-    'left': np.array([0.0, 1.0, 0.0]),
-    'right': np.array([0.7, -1.0, 0]),
-    'up': np.array([0, 0, 1.0]),
-    'down': np.array([0, 0, -1.0]),
-    'behind': np.array([1.0, 0, 0])
-}
+ATF = 80 * SimConfig.SIMULATION_FREQ_HZ / CONTROL_STEP_NORMALIZATION #Approx Total Frame
 
 class SimObject:
     def __init__(self, loc_rel, theta, colr=None, obj_type=None):
@@ -33,7 +24,6 @@ class SimDrone(SimObject):
     def __init__(self, drone_id, loc_rel, theta, theta_offset, target_obj=None):
         super().__init__(loc_rel, theta, obj_type='drone')
         self.idx = drone_id
-        os.makedirs(os.path.join(SimConfig.log_path, f'pybullet_pics{i2str(drone_id)}'), exist_ok=True)
         
         if target_obj is not None: self._setup_target(target_obj)
         self.traj_pos = [[*self.loc_abs]]
@@ -52,20 +42,15 @@ class SimDrone(SimObject):
         self.critical_dist_dest = CRITICAL_DIST * 0.1
         self.critical_dist_buffer = CRITICAL_DIST_BUFFER
 
-    def _setup_target(self, target_obj:SimObject, tasks=None):
+    def _setup_target(self, target_obj:SimObject, task_delta=None):
         self.target = target_obj
-        tasks = tasks.split('_')
-        self.tasks = tasks
-
-        delta = np.array([0.0, 0.0, 0.0])
-        for task in tasks:
-            delta += task_2_delta[task] * random.uniform(0.3, 0.6)
-        self.destination = (
-            target_obj.loc_rel[0] + delta[0], 
-            target_obj.loc_rel[1] + delta[1], 
-            target_obj.loc_rel[2] + delta[2]
-        )
-        text_out = f"Target locked on {target_obj.colr} at {target_obj.loc_rel}. Destination {self.destination}"
+        self.destination = target_obj.loc_rel
+        if task_delta is not None:
+            self.destination = (
+                target_obj.loc_rel[0] + task_delta[0], 
+                target_obj.loc_rel[1] + task_delta[1], 
+                target_obj.loc_rel[2] + task_delta[2]
+            )
 
         self.init_theta = self.traj_rpy[-1][-1]
         loc_rel = SimUtils.convert_to_relative(self.traj_pos[-1][:2], self.theta)
@@ -88,9 +73,10 @@ class SimDrone(SimObject):
         self.finish_counter = 0
         self.reached_critical = False
         self.dist_buffer = deque(maxlen=5)
-        self.destination = SimUtils.convert_to_global(self.destination, target_obj.theta)
 
-        return text_out
+        txout = f"Target locked on {target_obj.colr} {target_obj.obj_type} at {target_obj.loc_rel}. Destination {self.destination}"
+        self.destination = SimUtils.convert_to_global(self.destination, target_obj.theta)
+        return txout
 
     def _init_stable_trajectory(self):
         """ Holds still for one second of simulation """
@@ -203,6 +189,7 @@ class SimDrone(SimObject):
         return np.all(diffs < tol)
 
     def add_noise_to_traj(self):
+        if self.checkpoint_frame <=0: self.checkpoint_frame = self.traj_pos.shape[0]
         new_mean = 0 #random.uniform(-0.15, 0.15)
         xyz_noise_matrix = np.random.normal(0, 0.01, size=(3, self.checkpoint_frame))
         xyz_noise_matrix -= np.mean(xyz_noise_matrix, axis=1, keepdims=True)

@@ -5,7 +5,7 @@ import os
 import sys
 import json
 
-from ..gym_pybullet_drones.gym_pybullet_drones.examples.schemas import InitConditionsClosedLoopInferenceSchema
+from gym_pybullet_drones.examples.schemas import InitConditionsClosedLoopInferenceSchema
 
 
 def generate_init_conditions_closed_loop_inference(objects_color, PYBULLET_TO_GS_SCALING_FACTOR, closed_loop_save_paths) -> InitConditionsClosedLoopInferenceSchema:
