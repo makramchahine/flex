@@ -9,14 +9,20 @@ import random
 
 if __name__ == '__main__':
     all_inst = ''
-    for _ in tqdm(range(1)):
-        data_path = f'/home/alex/flex/Direction_Dataset/{"train" if random.random() < 0.9 else "eval"}/'
-        init_cond = generate_closed_loop_1drone_2ball_env_init(env_name='samurai', data_path=data_path)
-        print(init_cond, 'init_cond')
+    for _ in tqdm(range(75)):
+        data_path = f'/home/alex/flex/BLIP2_DATASET/{"train" if random.random() < 0.9 else "eval"}/left_blue'
+        init_cond = generate_closed_loop_1drone_2ball_env_init(
+            env_name='samurai', 
+            data_path=data_path,
+            command='left',
+            target_idx=1,
+            objs= ['red ball', 'blue ball']
+        )
+        # print(init_cond, 'init_cond')
 
         sim = MCMDSimSampler(init_cond, 3)
         inst = sim.run_simulation_to_completion(random_walk=True)
-        all_inst += inst
+        # all_inst += inst
 
         # im_path = os.path.join(log_path, "pybullet_pics")
 
@@ -36,7 +42,7 @@ if __name__ == '__main__':
 
         # out.release()
 
-    with open('r_test_inst.txt', 'w') as f:
-        f.write(all_inst)
+    # with open('r_test_inst.txt', 'w') as f:
+    #     f.write(all_inst)
 
 

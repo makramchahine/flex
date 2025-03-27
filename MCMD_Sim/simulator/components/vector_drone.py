@@ -148,10 +148,6 @@ class BezierSimDrone(SimDrone):
         delta_xy = P_look - bezier_points[:, :2]
         yaw_angles = np.unwrap(np.arctan2(delta_xy[:, 1], delta_xy[:, 0]))
 
-        # skip_points = int(0.5 * n_points)
-        # bezier_points = bezier_points[:-skip_points]
-        # yaw_angles = yaw_angles[:-skip_points]
-
         self.traj_pos += bezier_points.tolist()
         self.traj_rpy += [[0, 0, yaw] for yaw in yaw_angles]
 

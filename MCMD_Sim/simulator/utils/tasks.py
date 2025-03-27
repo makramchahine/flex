@@ -16,7 +16,29 @@ def get_task_delta(direction, target_idx = None):
           return delta * random.uniform(0.25, 0.35)
      return delta* random.uniform(0.45, 0.55)
 
-def generate_instruction(color: str, obj_type: str, direction: str) -> str:
+
+def generate_instruction(color: str, direction: str) -> str:
+    action_verbs= [
+        "Navigate", "Move", "Go", "Rush", "Travel", "Migrate", "Zoom", 
+        "Journey", "Advance", "Approach", "Proceed", "Venture", "Head"
+    ]
+    obj_words = [
+        "target", "spot", "signal", "symbol", "goal", "marker",
+        "location", "beacon", "destination"
+    ]
+    direction_phrases = {
+        "left": ["to the left of", "on the left of"],
+        "right": ["to the right of", "on the right of"],
+        "towards": ["towards the", "to the", "in the direction of the"],
+    }
+
+    verb = random.choice(action_verbs)
+    dir_phrase = random.choice(direction_phrases.get(direction, ["in some direction of the"]))
+    obj = random.choice(obj_words)
+
+    return f"{verb} {dir_phrase} {color} {obj}."
+
+def generate_instruction_old(color: str, obj_type: str, direction: str) -> str:
     action_verbs = ["Fly", "Navigate", "Move", "Steer", "Guide", "Drift", "Glide", "Circle"]
 
     templates = {
@@ -26,7 +48,7 @@ def generate_instruction(color: str, obj_type: str, direction: str) -> str:
             lambda v: f"{v} away from the {color} {obj_type} by going left",
             lambda v: f"Stay safe by passing to the left of the {color} {obj_type}",
             lambda v: f"Carefully drift to the left of the {color} {obj_type}",
-            lambda v: f"Circle around the {color} {obj_type} to the left"
+            # lambda v: f"Circle around the {color} {obj_type} to the left"
         ],
         "right": [
             lambda v: f"{v} to the right of the {color} {obj_type}",
@@ -34,7 +56,7 @@ def generate_instruction(color: str, obj_type: str, direction: str) -> str:
             lambda v: f"{v} away from the {color} {obj_type} by going right",
             lambda v: f"Stay safe by passing to the right of the {color} {obj_type}",
             lambda v: f"Carefully drift to the right of the {color} {obj_type}",
-            lambda v: f"Circle around the {color} {obj_type} to the right"
+            # lambda v: f"Circle around the {color} {obj_type} to the right"
         ],
         "towards": [
             lambda v: f"{v} directly towards the {color} {obj_type}",
@@ -42,7 +64,7 @@ def generate_instruction(color: str, obj_type: str, direction: str) -> str:
             lambda v: f"Guide yourself towards the {color} {obj_type}",
             lambda v: f"Steer directly to the {color} {obj_type}",
             lambda v: f"Glide steadily towards the {color} {obj_type}",
-            lambda v: f"Carefully approach the {color} {obj_type}"
+            # lambda v: f"Carefully approach the {color} {obj_type}"
         ]
     }
 

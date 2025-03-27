@@ -4,10 +4,10 @@ from marshmallow import Schema, fields, validate # type: ignore
 import random
 import numpy as np
 
-ALL_COLORS = ['red', 'blue', 'green']
+ALL_COLORS = ['red', 'blue']
 ALL_OBJ_TYPE = ['ball', 'cube']
 ALL_COMMANDS = [
-    # 'towards', 
+    'towards', 
     'left', 'right', 
     # 'behind', 'up', 'down',
     # 'up_right', 'up_left', 'up_behind', 

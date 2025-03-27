@@ -25,20 +25,26 @@ COLORS = {
 }
 
 class InitConditionParser:
-    def __init__(self, init_conditions):
+    def __init__(self, init_conditions, prefix=''):
         command = init_conditions['command']
+        target_idx = init_conditions['target_idx']
+        self.objs_color = init_conditions["objects_color"]
+
         log_path = init_conditions.get('log_dir', '/home/alex/flex/MCMD_Sim/results/')
-        data_path = init_conditions.get('data_dir', log_path)
+        data_path = init_conditions.get('data_dir', None)
         cur_dt = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-        SimConfig.log_path = os.path.join(log_path, f'{cur_dt}_{command}')
-        SimConfig.data_path = os.path.join(data_path, f'{cur_dt}_{command}')
+        cur_fld = f'{prefix}{command}_{target_idx}{self.objs_color[target_idx]}_{cur_dt}'
+        SimConfig.log_path = os.path.join(log_path, cur_fld)
+        if data_path is not None:
+            SimConfig.data_path = os.path.join(data_path, cur_fld)
+        else:
+            SimConfig.data_path = os.path.join(SimConfig.log_path, 'data')
 
         os.makedirs(SimConfig.log_path, exist_ok=True)
         os.makedirs(SimConfig.data_path, exist_ok=True)
         os.makedirs(os.path.join(SimConfig.log_path, 'pybullet_seg'), exist_ok=True)
 
-        self.objs_color = init_conditions["objects_color"]
-        self.drone_targets = [{init_conditions['target_idx'] : command}] #init_conditions['drones_targets']
+        self.drone_targets = [{target_idx : command}] #init_conditions['drones_targets']
         self.objs_loc = init_conditions['objects_loc']
         self.objs_type = init_conditions['objects_type']
         self.drones_loc = init_conditions['drones_loc']
@@ -52,9 +58,9 @@ class InitConditionParser:
 
 
 class MCMDSimulator: #Multiple Command Multiple Drones
-    def __init__(self, init_conditions: SimEnvInitSchema, record_hz: str):
+    def __init__(self, init_conditions: SimEnvInitSchema, record_hz: str, log_prefix=''):
         self.record_freq_hz = record_hz
-        init_cond = InitConditionParser(init_conditions)
+        init_cond = InitConditionParser(init_conditions, prefix=log_prefix)
         self.objs = [
             SimObject(loc_xy, SimConfig.theta_env, colr, obj_type) 
             for loc_xy, colr, obj_type in zip(init_cond.objs_loc, init_cond.objs_color, init_cond.objs_type)
@@ -176,7 +182,7 @@ class MCMDSimSampler(MCMDSimulator):
         for drone_idx, sim_drone in enumerate(self.drones):
             for i, (target_idx, command) in enumerate(self.drones_target[drone_idx].items()):
                 target = self.objs[target_idx]
-                inst_text = generate_instruction(target.colr, target.obj_type, command)
+                inst_text = generate_instruction(target.colr, command)
                 all_instructions += f'{SimConfig.log_path}--{inst_text}\n'
                 text_out = sim_drone._setup_target(target, task_delta=get_task_delta(command, target_idx))
                 self.logger.log_text(f'{inst_text}\n{text_out}')
@@ -283,8 +289,8 @@ class MCMDSimSampler(MCMDSimulator):
     
 
 class MCMDSimEval(MCMDSimulator):
-    def __init__(self, init_conditions, record_hz):
-        super().__init__(init_conditions, record_hz)
+    def __init__(self, init_conditions, record_hz, log_prefix=''):
+        super().__init__(init_conditions, record_hz, log_prefix)
         self.setup_simulation()
         self.drones = [drone.loc_rel for drone in self.drones]
         self.REC_EVERY_N_STEPS = int(np.floor(self.env.SIM_FREQ / self.record_freq_hz ))
