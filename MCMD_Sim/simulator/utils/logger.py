@@ -47,11 +47,11 @@ class SimLogger:
             self.vel_cmds[i].append(action[str(i)])
 
     @staticmethod
-    def parse_obj(obj):
+    def parse_obj(obj, is_rel = True):
         return {
-            'x': obj.loc_rel[0],
-            'y': obj.loc_rel[1],
-            'z': obj.loc_rel[2],
+            'x': obj.loc_rel[0] if is_rel else obj.loc_abs[0],
+            'y': obj.loc_rel[1] if is_rel else obj.loc_abs[1],
+            'z': obj.loc_rel[2] if is_rel else obj.loc_abs[2],
             'style': f"{obj.colr[0]}{'s' if obj.obj_type=='cube' else 'o'}"
         }
 

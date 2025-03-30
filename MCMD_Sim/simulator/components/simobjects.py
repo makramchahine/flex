@@ -20,9 +20,15 @@ class SimObject:
         self.theta = theta
         self.obj_type = obj_type
 
+    def __str__(self):
+        return f"{self.colr} {self.obj_type} at {(self.loc_rel)} with theta {self.theta}"
+
+    def __repr__(self):
+        return self.__str__()
+
 class SimDrone(SimObject):
     def __init__(self, drone_id, loc_rel, theta, theta_offset, target_obj=None):
-        super().__init__(loc_rel, theta, obj_type='drone')
+        super().__init__(loc_rel, theta, obj_type='drone', colr='black')
         self.idx = drone_id
         
         if target_obj is not None: self._setup_target(target_obj)

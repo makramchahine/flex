@@ -32,8 +32,11 @@ class InitConditionParser:
 
         log_path = init_conditions.get('log_dir', '/home/alex/flex/MCMD_Sim/results/')
         data_path = init_conditions.get('data_dir', None)
-        cur_dt = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-        cur_fld = f'{prefix}{command}_{target_idx}{self.objs_color[target_idx]}_{cur_dt}'
+        if prefix[:3] == 'ALL':
+            cur_fld = prefix[3:]
+        else:
+            cur_dt = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+            cur_fld = f'{prefix}{command}_{target_idx}{self.objs_color[target_idx]}_{cur_dt}'
         SimConfig.log_path = os.path.join(log_path, cur_fld)
         if data_path is not None:
             SimConfig.data_path = os.path.join(data_path, cur_fld)

@@ -4,5 +4,6 @@ from .simobjects import SimObject
 # from .vector_drone import VectorizedSimDrone as SimDrone
 # from .vector_drone import SmoothCorrectedSimDrone as SimDrone
 # from .vector_drone import NWLSimDrone as SimDrone
-from .vector_drone import BezierSimDrone as SimDrone
+# from .vector_drone import BezierSimDrone as SimDrone
+from .spline_drone import SplineSimDrone as SimDrone
 # from .simobjects import SimDrone
