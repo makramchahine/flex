@@ -1,5 +1,5 @@
 from typing import Optional
-from omegaconf import DictConfig
+from omegaconf import DictConfig # type: ignore
 import torch
 import torch.nn as nn
 from collections import deque
@@ -31,7 +31,7 @@ class LSTMPolicy(BasePolicy):
             dropout=cfg.dropout if cfg.num_layers > 1 else 0,
         )
         # final layer to return num actions
-        self.fc = nn.Linear(cfg.hidden_dim, cfg.num_classes + 1)
+        self.fc = nn.Linear(cfg.hidden_dim, cfg.num_classes)
         # self.fc_stop = nn.Linear(cfg.hidden_dim, 1)
 
     def forward(self, x: torch.Tensor):

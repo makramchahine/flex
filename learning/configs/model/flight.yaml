@@ -15,7 +15,7 @@ scheduler:
 
 net:
   _target_: src.models.components.e2e_net.E2ENet
-  output_names: [vx, vy, vz, yaw, stop]
+  output_names: [vx, vy, vz, yaw, stop, step_remain]
 
 criterion:
   _target_: src.models.components.criterion.FMCriterion
@@ -24,6 +24,7 @@ criterion:
     vy: 1
     vz: 1
     yaw: 1
+    step_remain: 1
   weights_class:
     stop: 1
   reduction: "mean"

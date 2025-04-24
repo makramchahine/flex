@@ -4,11 +4,13 @@ from PIL import Image
 import os
 import sys
 import json
+import sys
+sys.path.append('/home/alex/flex/gym_pybullet_drones/gym_pybullet_drones/examples')
 
-from gym_pybullet_drones.examples.schemas import InitConditionsClosedLoopInferenceSchema
+from schemas import InitConditionsClosedLoopInferenceSchema # type: ignore
+PYBULLET_TO_GS_SCALING_FACTOR = 1.0
 
-
-def generate_init_conditions_closed_loop_inference(objects_color, PYBULLET_TO_GS_SCALING_FACTOR, closed_loop_save_paths) -> InitConditionsClosedLoopInferenceSchema:
+def generate_init_conditions_closed_loop_inference(objects_color, **kwargs) -> InitConditionsClosedLoopInferenceSchema:
     """
     Specific implementation with weighted probabilities
 
@@ -50,16 +52,10 @@ def generate_init_conditions_closed_loop_inference(objects_color, PYBULLET_TO_GS
         "gs_objects_relative": np.array(gs_offsets_from_camera)[1:, 0:2].tolist()
     }
     init_conditions = init_conditions_schema.load(init_conditions)
-    for path in closed_loop_save_paths:
-        os.makedirs(path, exist_ok=True)
-        print(f"Saving init conditions to {path}")
-        init_conditions_path = os.path.join(path, "init_conditions.json")
-        with open(init_conditions_path, "w") as f:
-            json.dump(init_conditions, f)
 
     return init_conditions
 
-def generate_init_conditions_closed_loop_inference_2choice(objects_color, PYBULLET_TO_GS_SCALING_FACTOR, closed_loop_save_paths) -> InitConditionsClosedLoopInferenceSchema:
+def generate_init_conditions_closed_loop_inference_2choice(objects_color, **kwargs) -> InitConditionsClosedLoopInferenceSchema:
     """
     Specific implementation with weighted probabilities
 
@@ -103,16 +99,10 @@ def generate_init_conditions_closed_loop_inference_2choice(objects_color, PYBULL
         "gs_objects_relative": np.array(gs_offsets_from_camera)[1:, 0:2].tolist()
     }
     init_conditions = init_conditions_schema.load(init_conditions)
-    for path in closed_loop_save_paths:
-        os.makedirs(path, exist_ok=True)
-        print(f"Saving init conditions to {path}")
-        init_conditions_path = os.path.join(path, "init_conditions.json")
-        with open(init_conditions_path, "w") as f:
-            json.dump(init_conditions, f)
 
     return init_conditions
 
-def generate_init_conditions_closed_loop_inference_3choice_random(objects_color, PYBULLET_TO_GS_SCALING_FACTOR, closed_loop_save_paths) -> InitConditionsClosedLoopInferenceSchema:
+def generate_init_conditions_closed_loop_inference_3choice_random(objects_color, **kwargs) -> InitConditionsClosedLoopInferenceSchema:
     """
     Specific implementation with weighted probabilities
 
@@ -160,17 +150,11 @@ def generate_init_conditions_closed_loop_inference_3choice_random(objects_color,
         "gs_objects_relative": np.array(gs_offsets_from_camera)[1:, 0:2].tolist()
     }
     init_conditions = init_conditions_schema.load(init_conditions)
-    for path in closed_loop_save_paths:
-        os.makedirs(path, exist_ok=True)
-        print(f"Saving init conditions to {path}")
-        init_conditions_path = os.path.join(path, "init_conditions.json")
-        with open(init_conditions_path, "w") as f:
-            json.dump(init_conditions, f)
 
     return init_conditions
 
 # TODO: MAKRAM change here
-def generate_init_conditions_closed_loop_inference_5object(objects_color, PYBULLET_TO_GS_SCALING_FACTOR, closed_loop_save_paths) -> InitConditionsClosedLoopInferenceSchema:
+def generate_init_conditions_closed_loop_inference_5object(objects_color, **kwargs) -> InitConditionsClosedLoopInferenceSchema:
     """
     Specific implementation with weighted probabilities
 
@@ -217,11 +201,5 @@ def generate_init_conditions_closed_loop_inference_5object(objects_color, PYBULL
         "gs_objects_relative": np.array(gs_offsets_from_camera)[1:, 0:2].tolist()
     }
     init_conditions = init_conditions_schema.load(init_conditions)
-    for path in closed_loop_save_paths:
-        os.makedirs(path, exist_ok=True)
-        print(f"Saving init conditions to {path}")
-        init_conditions_path = os.path.join(path, "init_conditions.json")
-        with open(init_conditions_path, "w") as f:
-            json.dump(init_conditions, f)
 
     return init_conditions

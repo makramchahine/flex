@@ -6,6 +6,7 @@ train_data_path:
 eval_data_path:
   - ${paths.data_dir}/eval
 
+features_folder: null
 mode: IL
 buffer_size: 1000
 snippet_size: 100

@@ -1,0 +1,11 @@
+_target_: src.models.components.policies.svit2.SViTPolicy
+cfg:
+  image_size: [8, 8]
+  patch_size: [1, 1]
+  num_classes: 4
+  dim: 128
+  depth: 3
+  heads: 4
+  mlp_dim: 256
+  channels: 64 # should be consistent with the feature extractor
+  dim_head: 32

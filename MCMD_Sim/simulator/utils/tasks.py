@@ -6,18 +6,24 @@ task_2_delta = {
     'towards': np.array([-1.0, 0.0, 0.0]),
     'left': np.array([0.0, 1.0, 0.0]),
     'right': np.array([0.0, -1.0, 0]),
-    'up': np.array([0, 0, 1.0]),
-    'down': np.array([0, 0, -1.0]),
+    'above': np.array([0, 0, 0.7]),
+    'below': np.array([0, 0, -0.7]),
     'behind': np.array([1.0, 0, 0])
 }
 def get_task_delta(direction, target_idx = None):
      delta = task_2_delta[direction]
      if (target_idx == 0 and direction == 'right') or (target_idx == 1 and direction == 'left'):
           return delta * random.uniform(0.25, 0.35)
-     return delta* random.uniform(0.45, 0.55)
+     return delta * random.uniform(0.45, 0.55)
 
+def generate_instruction(color = '', direction = 'towards', obj_type = None) -> str:
+    if obj_type is None:
+        return f"{direction}---{color} ball"
+    if color in {'colorless', '', None}:
+         return f"{direction}---{obj_type}"
+    return f"{direction}---{color} {obj_type}"
 
-def generate_instruction(color: str, direction: str) -> str:
+def generate_instruction_structured(color = '', direction = 'towards', obj_type = None) -> str:
     action_verbs= [
         "Navigate", "Move", "Go", "Rush", "Travel", "Migrate", "Zoom", 
         "Journey", "Advance", "Approach", "Proceed", "Venture", "Head"
@@ -30,11 +36,17 @@ def generate_instruction(color: str, direction: str) -> str:
         "left": ["to the left of", "on the left of"],
         "right": ["to the right of", "on the right of"],
         "towards": ["towards the", "to the", "in the direction of the"],
+        "above": ["above the", "on top of", "over the"],
+        "below": [ "under the", "underneath the", "beneath the"],
+        "behind": ["behind the", "on the back of"]
     }
 
     verb = random.choice(action_verbs)
     dir_phrase = random.choice(direction_phrases.get(direction, ["in some direction of the"]))
     obj = random.choice(obj_words)
+
+    if color in {'colorless', '', None}:
+         return f"{verb} {dir_phrase} {obj_type}."
 
     return f"{verb} {dir_phrase} {color} {obj}."
 

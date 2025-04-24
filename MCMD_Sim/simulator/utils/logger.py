@@ -8,6 +8,34 @@ from .mcmd_utils import SimConfig, SimUtils
 
 i2str = lambda j : '' if j == 0 else f'_{j}'
 
+def get_style(obj_type: str, color: str) -> str:
+    """Return matplotlib style string based on object type and color."""
+    # Default color and shape fallbacks
+    color_map = {
+        "red": "r",
+        "blue": "b",
+        "yellow": "y",
+        "green": "g",
+        "purple": "m",  # using magenta for purple
+    }
+
+    marker_map = {
+        "ball": "o",
+        "cube": "s",
+        "pyramid": "^",
+        "jeep": "P",
+        "horse": "*",
+        "dog": "X",
+        "palmtree": "v",
+        "watermelon": "D",
+        "rocket": ">"
+    }
+
+    c = color_map.get(color, "k")
+    m = marker_map.get(obj_type, ".")
+    return c + m
+
+
 class SimLogger:
     def __init__(self):
         self.sim_timesteps = []
@@ -17,6 +45,7 @@ class SimLogger:
         self.timestepwise_displacement_array = [[] for _ in range(SimConfig.NUM_DRONES)]
         self.vel_cmds = [[] for _ in range(SimConfig.NUM_DRONES)]
         self.logs = ''
+        self.log_dir = SimConfig.log_path
 
     def log_text(self, txt):
         self.logs += f'{txt}\n'
@@ -47,12 +76,12 @@ class SimLogger:
             self.vel_cmds[i].append(action[str(i)])
 
     @staticmethod
-    def parse_obj(obj, is_rel = True):
+    def parse_obj(obj, is_rel = True, style_func = get_style):
         return {
             'x': obj.loc_rel[0] if is_rel else obj.loc_abs[0],
             'y': obj.loc_rel[1] if is_rel else obj.loc_abs[1],
             'z': obj.loc_rel[2] if is_rel else obj.loc_abs[2],
-            'style': f"{obj.colr[0]}{'s' if obj.obj_type=='cube' else 'o'}"
+            'style': style_func(obj.obj_type, obj.colr)
         }
 
     @staticmethod
@@ -76,41 +105,59 @@ class SimLogger:
                     ax.plot(obj[sbplt[0]], obj[sbplt[1]], obj['style'])
                     circle = Circle((obj[sbplt[0]], obj[sbplt[1]]), 0.5, color='red', fill=False, linestyle='--')
                     ax.add_patch(circle)
-            fig.savefig(SimConfig.log_path + f"/{plotname}_{sbplt}_{SimConfig.log_path[-13:]}.jpg")
+            fig.savefig(SimConfig.log_path + f"/{plotname}_{sbplt}_{SimConfig.log_path[-13:].replace('/', '_')}.jpg")
             plt.close(fig)
 
         fig, ax = plt.subplots()
         ax.plot(yaw_data)
         ax.set_ylabel('Yaw')
         fig.savefig(SimConfig.log_path + f"/{plotname}_yaw.jpg")
+        plt.close(fig)
+
+    def to_array(self):
+        if not isinstance(self.global_pos_array[0], np.ndarray):
+            for i in range(SimConfig.NUM_DRONES):
+                self.global_pos_array[i] = np.array(self.global_pos_array[i])
+                self.timestepwise_displacement_array[i] = np.array(self.timestepwise_displacement_array[i])
+                self.vel_array[i] = np.array(self.vel_array[i])
 
     def export_plots(self):
+        self.to_array()
         for i in range(SimConfig.NUM_DRONES):
             sim_dir = SimConfig.log_path
-            self.global_pos_array[i] = np.array(self.global_pos_array[i])
-            self.timestepwise_displacement_array[i] = np.array(self.timestepwise_displacement_array[i])
-            self.vel_array[i] = np.array(self.vel_array[i])
-
             self.plot_trajectory(
                 self.global_pos_array[i],
                 self.global_pos_array[i][:, 3],
                 'sim_pos',
                 self.objs
             )
-
             # ! Velocity Plot
-            fig3, axs3 = plt.subplots(2, 2)
+            fig3, axs3 = plt.subplots(2, 2, figsize=(15, 8))
             labels = ['X Velocity', 'Y Velocity', 'Z Velocity', 'Yaw Rate']
             for idx, label in enumerate(labels):
-                axs3.flat[idx].plot(self.vel_array[i][:, idx])
-                axs3.flat[idx].set_ylabel(label)
+                plt.subplot(2, 2, idx+1)
+                plt.plot(self.vel_array[i][:, idx])
+                plt.title(label)
             fig3.savefig(sim_dir + f"/sim_velocity{i2str(i)}.jpg")
+            plt.close(fig3)
+
+            # # ! Velocity Plot
+            # fig3, axs3 = plt.subplots(2, 2, figsize=(15, 8))
+            # labels = ['X Velocity', 'Y Velocity', 'Z Velocity', 'Yaw Rate']
+            # for idx, label in enumerate(labels):
+            #     plt.subplot(2, 2, idx+1)
+            #     plt.plot(self.vel_cmds[i][:, idx])
+            #     plt.title(label)
+            # fig3.savefig(sim_dir + f"/sim_velocity_cmds{i2str(i)}.jpg")
 
             np.savetxt(os.path.join(SimConfig.data_path, f'pos{i2str(i)}.csv'), self.global_pos_array[i], delimiter=',')
             np.savetxt(os.path.join(SimConfig.data_path, f'data_out{i2str(i)}.csv'), self.vel_array[i], delimiter=',')
             np.savetxt(os.path.join(sim_dir, f'timestepwise_displacement{i2str(i)}.csv'), self.timestepwise_displacement_array[i], delimiter=',')
+            if len(self.vel_cmds[i]) > 0:
+                np.savetxt(os.path.join(sim_dir, f'vel_cmds{i2str(i)}.csv'), self.vel_cmds[i], delimiter=',')
             with open(os.path.join(SimConfig.log_path, 'logs.txt'), 'w', encoding='utf-8') as f:
                 f.write(self.logs)
+            plt.close('all')
             
     def export_video(self):
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')

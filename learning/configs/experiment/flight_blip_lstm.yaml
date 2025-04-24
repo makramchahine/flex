@@ -38,10 +38,14 @@ model:
       cfg:
         image_size: [32, 1] # feature-vector BLIP gives (B, 32, 256 or 768)
         channels: 64
+        num_classes: 5
+        num_layers: 2
+        hidden_dim: 256
 
 data:
   batch_size: 32
   num_workers: 23
+  flag_last_num: 5
   load_features_directly: true
   use_standardize: false
   use_lavis_preprocess: true
@@ -58,6 +62,6 @@ callbacks:
 # reference: https://github.com/facebookresearch/maskrcnn-benchmark/issues/103#issuecomment-785815218
 pytorch_sharing_strategy: file_system
 
-ckpt_path:
-  - /home/alex/flex/local/train_flight/2025-03-05/21-49-26/checkpoints/step_075000.ckpt
-ckpt_new_mode: true
+# ckpt_path:
+#   - /home/alex/flex/local/train_flight/2025-03-05/21-49-26/checkpoints/step_075000.ckpt
+ckpt_new_mode: false

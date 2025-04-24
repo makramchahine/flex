@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from PIL import Image
 from learning.src.models.components.extractors.blip import BLIPExtractor
-from torchvision import transforms
+from torchvision import transforms # type: ignore
 
 # ----------------- SEED FUNCTION -----------------
 def set_seed(seed):
@@ -18,7 +18,7 @@ def set_seed(seed):
 
 # ----------------- DATA to BLIP FUNCTION -----------------
 def data2BLIP(model, data_path, target_path, device):
-    runs = sorted(os.listdir(data_path))
+    runs = sorted([r for r in os.listdir(data_path) if not r.startswith('save')])
     for i, run in enumerate(runs):
         target_path_run = os.path.join(target_path, run)
         os.makedirs(target_path_run, exist_ok=True)
@@ -36,14 +36,14 @@ def data2BLIP(model, data_path, target_path, device):
             img = transforms.ToTensor()(img)
             data_out = model({"image": img.to(device), "text":text})
             # print("sanity_check", data_out.shape)
-            torch.save(data_out, os.path.join(target_path_run, im_name.replace('.png', '.pth')))
+            torch.save(data_out.cpu(), os.path.join(target_path_run, im_name.replace('.png', '.pt')))
             run_loop.set_postfix({'Image': im_name})
 
 
 # ----------------- MAIN EXECUTION -----------------
 if __name__ == '__main__':
     data_path:str = '/home/alex/flex/BLIP2_DATASET/'
-    target_dir:str = "BLIP_Features/"
+    target_dir:str = "BLIP2_Features/"
     device = torch.device('cuda:0')
     set_seed(42)
     
@@ -64,6 +64,6 @@ if __name__ == '__main__':
     
     model.to(device)
     model.eval()
-    # data2BLIP(model, data_path+'train/', target_dir+'train/', device)
-    data2BLIP(model, data_path+'eval/', target_dir+'eval/', device)
+    data2BLIP(model, data_path+'train/', target_dir+'train/', device)
+    # data2BLIP(model, data_path+'eval/', target_dir+'eval/', device)
 

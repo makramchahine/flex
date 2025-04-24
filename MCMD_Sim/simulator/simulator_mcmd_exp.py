@@ -4,6 +4,8 @@ from scipy.stats import norm
 from datetime import datetime
 import json
 import random
+import pandas as pd
+from omegaconf import OmegaConf # type: ignore
 
 from .pybullet_drones import CtrlAviary, DSLPIDControl, SimplePIDControl
 from .utils.enums import DroneModel, ImageType
@@ -25,11 +27,11 @@ COLORS = {
 }
 
 class InitConditionParser:
-    def __init__(self, init_conditions, prefix=''):
+    def __init__(self, init_conditions, prefix='', logging=True):
         command = init_conditions['command']
         target_idx = init_conditions['target_idx']
         self.objs_color = init_conditions["objects_color"]
-
+        
         log_path = init_conditions.get('log_dir', '/home/alex/flex/MCMD_Sim/results/')
         data_path = init_conditions.get('data_dir', None)
         if prefix[:3] == 'ALL':
@@ -43,27 +45,28 @@ class InitConditionParser:
         else:
             SimConfig.data_path = os.path.join(SimConfig.log_path, 'data')
 
-        os.makedirs(SimConfig.log_path, exist_ok=True)
-        os.makedirs(SimConfig.data_path, exist_ok=True)
-        os.makedirs(os.path.join(SimConfig.log_path, 'pybullet_seg'), exist_ok=True)
-
         self.drone_targets = [{target_idx : command}] #init_conditions['drones_targets']
         self.objs_loc = init_conditions['objects_loc']
         self.objs_type = init_conditions['objects_type']
         self.drones_loc = init_conditions['drones_loc']
         self.env_name = init_conditions['env_name']
+        self.progress_scale = init_conditions.get('progress_scale', 0.0)
 
         SimConfig.theta_offset = init_conditions["theta_offset"]
         SimConfig.theta_env = init_conditions["theta_environment"]
 
-        with open(os.path.join(SimConfig.log_path, 'init_conditions.json'), 'w') as f:
-            json.dump(init_conditions, f)
+        if logging:
+            os.makedirs(SimConfig.log_path, exist_ok=True)
+            os.makedirs(SimConfig.data_path, exist_ok=True)
+            os.makedirs(os.path.join(SimConfig.log_path, 'pybullet_seg'), exist_ok=True)
+            with open(os.path.join(SimConfig.log_path, 'init_conditions.json'), 'w') as f:
+                json.dump(init_conditions, f)
 
 
 class MCMDSimulator: #Multiple Command Multiple Drones
-    def __init__(self, init_conditions: SimEnvInitSchema, record_hz: str, log_prefix=''):
+    def __init__(self, init_conditions: SimEnvInitSchema, record_hz: str, log_prefix='', logging=True):
         self.record_freq_hz = record_hz
-        init_cond = InitConditionParser(init_conditions, prefix=log_prefix)
+        init_cond = InitConditionParser(init_conditions, prefix=log_prefix, logging=logging)
         self.objs = [
             SimObject(loc_xy, SimConfig.theta_env, colr, obj_type) 
             for loc_xy, colr, obj_type in zip(init_cond.objs_loc, init_cond.objs_color, init_cond.objs_type)
@@ -75,9 +78,11 @@ class MCMDSimulator: #Multiple Command Multiple Drones
         SimConfig.NUM_DRONES = len(self.drones)
         self.drones_target = init_cond.drone_targets # List of map of target indicies in self.objs to command
         self.env_name = init_cond.env_name
+        self.progress_scale = init_cond.progress_scale
         assert len(self.drones_target) == SimConfig.NUM_DRONES, 'Atleast one drone does not have target defined'
 
         self.logger = SimLogger()
+        self.logging = logging
         self.logger.log_objs(self.objs)
         self.seg_color_map = {}
         self.COLORS = {
@@ -94,34 +99,38 @@ class MCMDSimulator: #Multiple Command Multiple Drones
         }
 
 #-----------------Simulation Helper Functions-----------------------------------
-    def export_snap(self, drone_index):
+    def export_snap(self, drone_index, save_image=True, target_idx=None):
         rgb, dep, seg = self.env._getDroneImages(drone_index)
-        if len(np.unique(seg)) <= 4: self.no_object_in_sight += 1
+        seg_unique = np.unique(seg)
+        if target_idx is not None:
+            if len(seg_unique) <= 4 or target_idx + 2 not in seg_unique: self.no_object_in_sight += 1
+        if self.logging and save_image:
+            cseg = np.zeros((seg.shape[0], seg.shape[1], 4))
+            for val in seg_unique:
+                val = int(val)
+                mask = (seg == val)
+                if val in self.seg_color_map:
+                    color_values = self.seg_color_map[val]
+                else:
+                    color_name, color_values = random.choice(list(self.COLORS.items()))
+                    self.logger.log_text(f'{val}: {color_values} -- {color_name}')
+                    del self.COLORS[color_name]  # Remove the color from the dictionary
+                    self.seg_color_map[val] = color_values
+                cseg[mask] = np.array(color_values)
+            
+            self.env._exportImage(
+                img_type=ImageType.RGB,
+                img_input=cseg,
+                path=os.path.join(SimConfig.log_path, f'pybullet_seg{i2str(drone_index)}'),
+                frame_num=int(self.simulation_counter),
+            )
+            self.env._exportImage(
+                img_type=ImageType.RGB,
+                img_input=rgb,
+                path=SimConfig.data_path,#os.path.join(SimConfig.log_path, f'pybullet_pics{i2str(drone_index)}'),
+                frame_num=int(self.simulation_counter),
+            )
 
-        cseg = np.zeros((seg.shape[0], seg.shape[1], 4))
-        for val in np.unique(seg):
-            mask = seg == val
-            if val in self.seg_color_map:
-                color_values = self.seg_color_map[val]
-            else:
-                color_name, color_values = random.choice(list(self.COLORS.items()))
-                self.logger.log_text(f'{val}: {color_values} -- {color_name}')
-                del self.COLORS[color_name]  # Remove the color from the dictionary
-                self.seg_color_map[val] = color_values
-            cseg[mask] = np.array(color_values)
-        
-        self.env._exportImage(
-            img_type=ImageType.RGB,
-            img_input=cseg,
-            path=os.path.join(SimConfig.log_path, f'pybullet_seg{i2str(drone_index)}'),
-            frame_num=int(self.simulation_counter),
-        )
-        self.env._exportImage(
-            img_type=ImageType.RGB,
-            img_input=rgb,
-            path=SimConfig.data_path,#os.path.join(SimConfig.log_path, f'pybullet_pics{i2str(drone_index)}'),
-            frame_num=int(self.simulation_counter),
-        )
         return rgb
 
     def set_num_steps_until_record(self):
@@ -138,10 +147,13 @@ class MCMDSimulator: #Multiple Command Multiple Drones
             raise ValueError(f"Incorrect hz value: {hz}")
 
 #-----------------Simulation Setup Code  ----------------------------------------------
-    def setup_simulation(self):
+    def setup_simulation(self, verbose = True):
         objs_details = {"colors": [], "locations": []}
         for obj in self.objs:
-            objs_details['colors'].append(f'{obj.colr} {obj.obj_type}')
+            if obj.colr in {'colorless', '', None}:
+                objs_details['colors'].append(f'{obj.obj_type}')
+            else:
+                objs_details['colors'].append(f'{obj.colr} {obj.obj_type}')
             objs_details['locations'].append(obj.loc_abs)
 
         AGGR_PHY_STEPS = int(SimConfig.SIMULATION_FREQ_HZ / SimConfig.CONTROL_FREQ_HZ) if SimConfig.AGGREGATE else 1
@@ -161,7 +173,8 @@ class MCMDSimulator: #Multiple Command Multiple Drones
             obstacles=SimConfig.OBSTACLES,
             user_debug_gui=SimConfig.USER_DEBUG_GUI,
             custom_obj_location=objs_details,
-            env_name=self.env_name
+            env_name=self.env_name,
+            verbose = verbose
         )
         self.env.IMG_RES = np.array([224, 224])
         self.env.reset()
@@ -176,9 +189,6 @@ class MCMDSimulator: #Multiple Command Multiple Drones
 
     
 class MCMDSimSampler(MCMDSimulator):
-    def __init__(self, init_conditions, record_hz):
-        super().__init__(init_conditions, record_hz)
-
 #*---------- Trajectory Precomputation ------------------------------------------
     def precompute_trajectory(self, turn_only=False, random_walk=False, export_traj=False):
         all_instructions = ''
@@ -189,9 +199,7 @@ class MCMDSimSampler(MCMDSimulator):
                 all_instructions += f'{SimConfig.log_path}--{inst_text}\n'
                 text_out = sim_drone._setup_target(target, task_delta=get_task_delta(command, target_idx))
                 self.logger.log_text(f'{inst_text}\n{text_out}')
-                print(text_out)
-                # if i == 0: sim_drone._init_stable_trajectory()
-                sim_drone._compute_trajectory(turn_only)
+                sim_drone._compute_trajectory(turn_only, progress_scale=self.progress_scale)
 
             sim_drone.traj_pos = np.array(sim_drone.traj_pos)
             sim_drone.traj_rpy = np.array(sim_drone.traj_rpy)
@@ -223,8 +231,8 @@ class MCMDSimSampler(MCMDSimulator):
         ]) or self.no_object_in_sight > 1
     
 #-----------------Simulation Setup Code  ----------------------------------------------
-    def setup_simulation(self):
-        super().setup_simulation()
+    def setup_simulation(self, verbose = True):
+        super().setup_simulation(verbose=verbose)
         num_active_drones = 0
         self.STEPS = []
         for i, sim_drone in enumerate(self.drones):
@@ -243,7 +251,9 @@ class MCMDSimSampler(MCMDSimulator):
         step_counter = 0
         step_complete = [False for _ in range(len(self.drones))]
         while not all(step_complete):#recorded_image == False and self.simulation_counter < self.STEPS:
+            # self.logger.log_action(self.action)
             obs, reward, done, info = self.env.step(self.action)
+            if self.simulation_counter == 0: self.logger.log_obs(obs)
 
             if self.simulation_counter % self.CTRL_EVERY_N_STEPS == 0:
                 for j, sim_drone in enumerate(self.drones):
@@ -262,7 +272,9 @@ class MCMDSimSampler(MCMDSimulator):
             if step_counter >= self.num_steps_until_record: # and self.simulation_counter>self.env.SIM_FREQ:
                 for d, sim_drone in enumerate(self.drones):
                     if not step_complete[d]:
-                        self.export_snap(d)
+                        #TODO fix it for multiple target 
+                        tidx = list(self.drones_target[d].keys())[0]
+                        self.export_snap(d, target_idx=tidx)
                         step_complete[d] = True
                 self.logger.log_timestep(self.simulation_counter *  1.0 / SimConfig.SIMULATION_FREQ_HZ)
 
@@ -274,15 +286,14 @@ class MCMDSimSampler(MCMDSimulator):
         return obs
 
     #------------------------------Simulation All in one run code ---------------------------
-    def run_simulation_to_completion(self, turn_only=False, random_walk=False):
+    def run_simulation_to_completion(self, turn_only=False, random_walk=False, verbose = True):
         """ Creates training images with the stored trajectory """
         inst = self.precompute_trajectory(turn_only=turn_only, random_walk=random_walk, export_traj=True)
-        self.setup_simulation()
+        self.setup_simulation(verbose=verbose)
 
         while not self.check_exausted_steps():
             obs = self.__step_simulation()
             self.logger.log_obs(obs)
-            self.logger.log_action(self.action)
         self.env.close()
 
         self.logger.export_plots()
@@ -292,27 +303,30 @@ class MCMDSimSampler(MCMDSimulator):
     
 
 class MCMDSimEval(MCMDSimulator):
-    def __init__(self, init_conditions, record_hz, log_prefix=''):
-        super().__init__(init_conditions, record_hz, log_prefix)
-        self.setup_simulation()
+    def setup_simulation(self, verbose = True):
+        super().setup_simulation(verbose=verbose)
         self.drones = [drone.loc_rel for drone in self.drones]
         self.REC_EVERY_N_STEPS = int(np.floor(self.env.SIM_FREQ / self.record_freq_hz ))
-        
+        imgs = []
+        for i in range(len(self.drones)):
+            im = self.export_snap(i)
+            imgs.append(im[:, :, :3])
+        return imgs
+
 #----------------------------- Simulation Action and Control ------------------------------------
-    def step_action(self, vel_cmds):
+    def step_action(self, vel_cmds, save_image = True):
         imgs = []
         updated_action = False
         vel_cmd_world = {}
         while (self.simulation_counter % self.REC_EVERY_N_STEPS) != 0 or not updated_action:
-            self.logger.log_action(self.action)
+            # self.logger.log_action(self.action)
             obs, reward, done, info = self.env.step(self.action)
             state = obs[str(0)]["state"]
             yaw = state[9]
 
-            #* Network Frequency is 30hz
             if self.simulation_counter % self.REC_EVERY_N_STEPS== 0:
                 for d in range(SimConfig.NUM_DRONES):
-                    img = self.export_snap(d)
+                    img = self.export_snap(d, save_image=save_image)
                     imgs.append(img[:, :, :3])
                     vel_cmd_world[d] = SimUtils.convert_vel_cmd_to_world_frame(vel_cmds[d], yaw)
 
@@ -330,13 +344,18 @@ class MCMDSimEval(MCMDSimulator):
                                                         target_pos=state[0:3],  # same as the current position
                                                         target_rpy=np.array([0, 0, state[9]]),  # keep current yaw
                                                         target_vel=vel_cmd_world[d][0:3],
-                                                        target_rpy_rates=np.array([0, 0, vel_cmds[d][3]])
+                                                        target_rpy_rates=np.array([0, 0, vel_cmd_world[d][3]])
                                                 )
             self.simulation_counter += 1
         return imgs
     
-    def close(self):
+    def simulate_csv(self, csv_path, save=True):
+        df = pd.read_csv(csv_path)
+    
+    def close(self, save=True):
         self.env.close()
-        self.logger.export_plots()
-        self.logger.export_video()
-        return SimConfig.log_path
+        self.logger.to_array()
+        if self.logging and save:
+            self.logger.export_plots()
+            self.logger.export_video()
+        return self.logger

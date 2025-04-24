@@ -18,25 +18,52 @@ from learning.src.models.components.policies.transformer import TransformerPolic
 from learning.src.data.components.flight_il_dataset_clean import FlightILDataset
 from dataclasses import dataclass, asdict
 from torchvision import transforms # type: ignore
+from omegaconf import OmegaConf # type: ignore
 import argparse
+    
+class CKPT:
+    def __init__(self, train_day, train_time, train_step, policy = None, mode = None):
+        self.train_day = train_day
+        self.train_time = train_time
+        self.train_step = train_step
+        self.policy_name = policy[0]
+        self.num_actions = policy[1]
+        self.mode = mode
+        self.path = None
+        self.policy_cfg = None
+        
+        base = '/home/alex/flex/local/train_flight'
+        cpath = os.path.join(base, self.train_day, self.train_time, 'checkpoints', f'step_{self.train_step}.ckpt')
+        if os.path.exists(cpath):
+            self.path = cpath
+            config = OmegaConf.load(os.path.join(base, self.train_day, self.train_time, 'config'))
+            self.policy_name = config.model.net.policy.get('model_type', 'LSTM')
+            if self.policy_name == 'SimpleViT': self.policy_name = 'VIT'
+            self.policy_cfg = config.model.net.policy.cfg
+            self.num_actions = config.model.net.policy.cfg.num_classes
 
+    @property
+    def prefix(self):
+        if not self.path: return ''
+        day = self.train_day.split('-')[-1]
+        tm = '_'.join(self.train_time.split('-')[:2])
+        st = int(int(self.train_step) / 1000)
+        return f'{self.policy_name}{self.num_actions}_{day}_{tm}_{st}k_'
 # ----------------- CONFIGURATION CLASSES ---------------------------------------
 mode = 'infer' # train, eval, infer, infer_eval
-policy_name = 'VIT' # LSTM, VIT
-ckpt_path = '/home/alex/flex/local/train_flight/2025-03-25/16-32-20/checkpoints/step_100000.ckpt'    #LSTM 2 layer
-# ckpt_path = '/home/alex/flex/local/train_flight/2025-03-25/15-45-15/checkpoints/step_575000.ckpt'  #VIT 5 actions
-# ckpt_path = '/home/alex/flex/local/train_flight/LSTM_from_tensor_8x8_flag/03-06-00-09-17/checkpoints/step_200000.ckpt' #LSTM 1 layer
+policy_name = 'LSTM' # LSTM, VIT
+num_actions = 5
+ckpt = CKPT('2025-04-09', '10-14-08', '325000', policy = (policy_name, num_actions), mode = mode)
 
 @dataclass
 class InferenceConfig:
     env_name:str = 'samurai' # arena, samurai
-    obj0:str = 'red ball'
-    obj1:str = 'blue ball'
-    target_idx:int = 1
+    obj0:str = 'colorless rocket'
+    obj1:str = 'red ball'
+    target_idx:int = 0
     text_cmd:str = 'right'
-    max_step:int = 200
+    max_step:int = 100
     stop_thresh:float = 0.4
-
 
 @dataclass
 class VITConfig: 
@@ -48,7 +75,7 @@ class VITConfig:
     mlp_dim:int = 256
     channels:int = 64
     dim_head:int = 32
-    num_classes:int = 5  #previously trained with 4
+    num_classes:int = ckpt.num_actions
 
 @dataclass
 class LSTMConfig: 
@@ -56,21 +83,20 @@ class LSTMConfig:
     reduced_dim:int = 8
     spatial_dim:int = 8
     seq_length:int = 32
-    hidden_dim:int = 128
+    hidden_dim:int = 256
     num_layers:int = 2
-    num_classes:int = 5
+    num_classes:int = ckpt.num_actions
     single_step:bool = False
     dropout:float = 0.5
 
-
 @dataclass
 class DataConfig:
-    data_path:str = 'BLIP2_DATASET/train/' if mode == 'train' else 'BLIP2_DATASET/eval/'
+    data_path:str = 'BLIP2_DATASET/train/' if mode == 'train' else 'BLIP2_DATASET/train/'
     snippet_size:int = 100
     seq_length:int = 32 if mode == 'train' else 1
     stride:int = 5 if mode == 'train' else 1
     batch_size:int = 32 if mode == 'train' else 1
-    num_workers:int = 1
+    num_workers:int = 1 if mode == 'train' else 0
     shuffle:bool = mode == 'train'
 
 @dataclass
@@ -82,25 +108,27 @@ class TrainingConfig:
 
 @dataclass
 class ExperimentConfig:
-    policy_cfg:LSTMConfig = LSTMConfig() if policy_name == 'LSTM' else VITConfig
+    policy_cfg:LSTMConfig = ckpt.policy_cfg if ckpt.policy_cfg is not None else LSTMConfig() if ckpt.policy_name == 'LSTM' else VITConfig()
     train_cfg:TrainingConfig = TrainingConfig()
     data_cfg:DataConfig = DataConfig()
     infer_cfg:InferenceConfig = InferenceConfig()
-    device:str = torch.device('cuda:0')
 
-    policy_name:str = policy_name
+    device:str = torch.device('cuda:0')
+    policy_name:str = ckpt.policy_name
     mode:str = mode
-    log_dir:str = "local2"
-    checkpoint_path:str = ckpt_path
+    log_dir:str = os.path.join('local2', mode, ckpt.policy_name +'325k' + datetime.now().strftime('%Y_%m_%d'))
+    checkpoint_path:str = ckpt.path if ckpt else None
     new_ckpt_mode:bool = True
+    meta_data:str = ''
 
     def __post_init__(self):
-        if self.mode != 'infer': self.log_dir = f"local2/{datetime.now().strftime('%Y_%m_%d_%H_%M')}"
+        if self.mode != 'train':
+            assert self.checkpoint_path is not None, "Checkpoint is required for evaluation and inference"
 
-    def json_dump(self, log_dir=None):
-        if log_dir is None: log_dir = self.log_dir
-        self.device = str(self.train_cfg.device)
-        with open(os.path.join(log_dir, 'experiment_config.json'), "w") as f:
+    def json_dump(self):
+        self.meta_data = ExperimentConfig.meta_data
+        self.device = str(self.device)
+        with open(os.path.join(self.log_dir, f'exp_cfg_{datetime.now().strftime("%H_%M")}.json'), "w") as f:
             json.dump(asdict(self), f, indent=4)
         self.device = torch.device(self.device)
 
@@ -111,20 +139,11 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
-    random.seed(seed)
-
-# ----------------- DATA LOADER FUNCTION -----------------
-def get_data_loader():  
-    dataset = FlightILDataset(
-        [DataConfig.data_path], train= mode == 'train', shuffle=DataConfig.shuffle, 
-        snippet_size=DataConfig.snippet_size, seq_length=DataConfig.seq_length, 
-        stride=DataConfig.stride
-    )   
-    return DataLoader(dataset, batch_size=DataConfig.batch_size, num_workers=DataConfig.num_workers)
+    random.seed(seed)    
 
 # ----------------- End to End Model -----------------
 class E2ENet(nn.Module):
-    def __init__(self, policy, device, *args, **kwargs):
+    def __init__(self, policy, device, feature_extraction = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.extractor = BLIPExtractor(
             'blip2_feature_extractor',
@@ -139,7 +158,7 @@ class E2ENet(nn.Module):
             all_q_dims= False,
             use_masked_patch_wise_feature= True,
             use_visual_encoder_only= False,
-            extract_features_flag= True
+            extract_features_flag = feature_extraction
         )
         self.policy = policy
         self._output_names = ['vx', 'vy', 'vz', 'yaw', 'stop']
@@ -182,18 +201,37 @@ class E2ENet(nn.Module):
 
         print(f"Checkpoint loaded: {path}")
 
-# ----------------- End to End Model -----------------
+# ----------------- CSV Models -----------------
 class CSVNet:
     def __init__(self, csv_path):
         self._output_names = ['vx', 'vy', 'vz', 'yaw', 'stop']
         self.df = pd.read_csv(csv_path)
         self.cur_idx = 0
 
-    def __call__(self, x= None):
-        out = self.df.iloc[self.cur_idx]
-        out_dim = out.shape[-1]
-        out = {k: out[...,i] for i, k in enumerate(self._output_names[:out_dim])}
+    def __call__(self, x=None):
+        row = self.df.iloc[self.cur_idx]
+        out = {k: torch.tensor([row[k]], dtype=torch.float32) for k in self._output_names if k in row}
+        out['stop'] = torch.log(out.get('stop', torch.tensor([0.2])))
+        self.cur_idx += 1
+        if self.cur_idx == len(self.df):
+            out['stop'] = torch.tensor([10.0], dtype=torch.float32)
         return out
+    
+class CSVNet2:
+    def __init__(self, csv_path):
+        self.out_keys = ['vx', 'vy', 'vz', 'yaw']
+        self.df = pd.read_csv(csv_path)
+        self.cur_idx = 0
+
+    def __call__(self, x=None):
+        row = self.df.iloc[self.cur_idx]
+        out = {k: torch.tensor([row[i]], dtype=torch.float32) for i, k in enumerate(self.out_keys)}
+        out['stop'] = torch.log(out.get('stop', torch.tensor([0.2])))
+        self.cur_idx += 1
+        if self.cur_idx == len(self.df):
+            out['stop'] = torch.tensor([10.0], dtype=torch.float32)
+        return out
+
 
 # ----------------- LOSS FUNCTION -----------------
 
@@ -236,11 +274,11 @@ def train(model, train_loader, writer, config:TrainingConfig, ckpt_path):
                 # print(f"Checkpoint saved: {checkpoint_path}")
 
 # ----------------- Evaluation FUNCTION -----------------
-def evaluate(model, eval_loader, eval_path, max_eval_num=10):
-    model.eval()
+def evaluate(model, eval_loader, max_eval_num=10, prefix=''):
+    runs = []
+    cur_path = ExperimentConfig.log_dir
     num_eval = 0
     plot_toggle = False
-
     # losses = {'vx': [], 'vy': [], 'vz': [], 'yaw': [], 'total': []}
     vals = {'vx': [], 'vy': [], 'vz': [], 'yaw': [], 
             'vx_y': [], 'vy_y': [], 'vz_y': [], 'yaw_y': [], 
@@ -250,13 +288,10 @@ def evaluate(model, eval_loader, eval_path, max_eval_num=10):
         for i, data in loop:
             if num_eval >= max_eval_num: break
             x, y = data
-            pred = model(x)
-            pred['stop'] = torch.sigmoid(pred['stop'])
-            for key, value in pred.items():
-                vals[key].append(value.cpu().numpy())
-                vals[key+'_y'].append(y[key].cpu().numpy())
-
             if y['stop'].sum()>0 and not plot_toggle:
+                runs.append(eval_loader.dataset.cur_run)
+                cur_path = os.path.join(ExperimentConfig.log_dir, prefix+runs[-1])
+                os.makedirs(cur_path, exist_ok=True)
                 plot_toggle = True
             if plot_toggle and y['stop'].sum() == 0:
                 num_eval += 1
@@ -264,16 +299,27 @@ def evaluate(model, eval_loader, eval_path, max_eval_num=10):
                 ax, fig = plt.subplots(3, 2, figsize=(15, 10))
                 for j, key in enumerate(['vx', 'vy', 'vz', 'yaw', 'stop']):
                     plt.subplot(3, 2, j+1)
-                    plt.plot(vals[key][:-1], label='pred')
-                    plt.plot(vals[key+'_y'][:-1], label='gt')
+                    plt.plot(vals[key], label='pred')
+                    plt.plot(vals[key+'_y'], label='gt')
                     plt.legend()
                     plt.title(key)
-                plt.savefig(os.path.join(eval_path, f"eval_{i}.png"))
+                plt.savefig(os.path.join(cur_path, "eval_vel_cmds.png"))
+                df = pd.DataFrame(vals)
+                df.to_csv(os.path.join(cur_path, "eval_vel_cmds.csv"), index=False)
 
                 for key in vals:
-                    vals[key] = [vals[key][-1]]
+                    vals[key] = []
+            
+            pred = model(x)
+            pred['stop'] = torch.sigmoid(pred.get('stop', torch.tensor([-1.0])))
+            for key, value in pred.items():
+                vals[key].append(value.cpu().item())
+                vals[key+'_y'].append(y[key].cpu().item())
+
+    ExperimentConfig.meta_data = '\n'.join(runs)
+    return runs
 # ----------------- Infer Function -----------------
-def infer(model, init_cond, text_cmd):
+def infer(model, init_cond, text_cmd, prefix=''):
     """
     Runs inference on a policy model and controls a simulator to follow the instructions.
 
@@ -284,29 +330,96 @@ def infer(model, init_cond, text_cmd):
             and max steps to run.
     """
     from MCMD_Sim.simulator.simulator_mcmd_exp import MCMDSimEval
-    sim = MCMDSimEval(init_cond, 3, log_prefix=ExperimentConfig.policy_name)
+    sim = MCMDSimEval(init_cond, 3, log_prefix=prefix)
 
-    vel_cmd = np.array([[0,0,0,0]])
-    image = sim.step_action(vel_cmd)[0]
+    image = sim.setup_simulation()[0]
     pred_stops = []
     with torch.no_grad():
         for iter in tqdm(range(InferenceConfig.max_step)):
             image = Image.fromarray(image)
             img = image.resize((224, 224))
             img = transforms.ToTensor()(img).to('cuda:0')
-            # text = 'zoom in on the red ball'
 
             preds = model({"image": img, "text": text_cmd})
             pred_stop = torch.sigmoid(preds.get('stop', torch.tensor([-1.0])))
-            pred_stops.append(pred_stop[0].cpu().numpy())
+            pred_stops.append(pred_stop[0].cpu().item())
 
             vel_cmd = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
             image = sim.step_action(vel_cmd)
             image = image[0]
 
-            if pred_stop > InferenceConfig.stop_thresh: break
+            if pred_stop > InferenceConfig.stop_thresh and iter > 30: break
 
-    log_dir = sim.close()
+    logger = sim.close()
+
+    fig, ax = plt.subplots(2, 1, figsize=(15, 10))
+    plt.subplot(2, 1, 1)
+    plt.plot(pred_stops)
+    plt.title('Stop Predition')
+    plt.subplot(2, 1, 2)
+    plt.plot(np.log(np.array(pred_stops)))
+    plt.title('Stop Predition Log Scale')
+    plt.savefig(os.path.join(logger.log_dir, 'pred_stop.jpg'))
+    return logger.log_dir
+
+def infer2(model, init_cond, text_cmd, prefix=''):
+    import sys
+    sys.path.append('/home/alex/flex/gym_pybullet_drones')
+    sys.path.append('/home/alex/flex/gym_pybullet_drones/gym_pybullet_drones')
+    sys.path.append('/home/alex/flex/gym_pybullet_drones/gym_pybullet_drones/examples')
+    from simulator_eval import EvalSimulator # type: ignore
+    from simulator_utils import get_x_y_z_yaw_relative_to_base_env # type: ignore
+
+    init_cond['log_dir'] = os.path.join(init_cond['log_dir'], prefix[3:])
+    init_cond['start_heights'] = init_cond['drones_loc'][0][2]
+    init_cond['target_heights'] = init_cond['objects_loc'][init_cond['target_idx']][2]
+    init_cond['objects_color'] = [f'{colr} {obj_type}' for colr, obj_type in zip(init_cond['objects_color'], init_cond['objects_type'])]
+    init_cond['objects_relative'] = [(loc[0], loc[1]) for loc in init_cond['objects_loc']]
+    init_cond['start_dist'] = np.linalg.norm(np.array(init_cond['drones_loc'][0]) - np.array(init_cond['objects_loc'][init_cond['target_idx']]))
+
+    sim = EvalSimulator(init_cond['log_dir'], init_cond, 3, init_cond['target_idx'], init_cond['env_name'])
+
+    sim.setup_simulation()
+
+    vel_cmd = np.array([0,0,0,0])
+    sim.vel_cmd_world = vel_cmd
+    updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
+    updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
+    pybullet_img = pybullet_img[None, :, :, 0:3]
+
+    init_forward = updated_position[0]
+    unnormalized_cmds = []
+    text = text_cmd
+    pred_stops = []
+    with torch.no_grad():
+        for iter in tqdm(range(InferenceConfig.max_step)):
+            image = copy.deepcopy(pybullet_img)
+            image = image.squeeze(0)
+            image = Image.fromarray(image)
+            img = image.resize((224, 224))
+            img = transforms.ToTensor()(img).to('cuda:0')
+
+            # run inference
+            preds = model({"image": img, "text": text})
+            out = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
+            vel_cmd = out[0]
+            pred_stop = torch.sigmoid(preds['stop'])
+
+            pred_stops.append(pred_stop[0].cpu().numpy())
+            unnormalized_cmds.append([*vel_cmd, pred_stop[0].cpu().numpy().item()])
+
+            updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
+            if finished or pred_stop > InferenceConfig.stop_thresh:
+                break
+            pybullet_img = pybullet_img[None, :, :, 0:3]
+
+            updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
+            updated_position -= [init_forward, 0, 0.6, sim.theta_environment]
+
+
+    sim.export_plots()
+
+    log_dir = init_cond['log_dir']
 
     fig, ax = plt.subplots(2, 1, figsize=(15, 10))
     plt.subplot(2, 1, 1)
@@ -316,94 +429,100 @@ def infer(model, init_cond, text_cmd):
     plt.plot(np.log(np.array(pred_stops)))
     plt.title('Stop Predition Log Scale')
     plt.savefig(os.path.join(log_dir, 'pred_stop.jpg'))
-    return log_dir
-
-# ----------------- Infer Function -----------------
-def infer_eval(infer_path, infer_cfg:InferenceConfig):
-    """
-    Runs inference on a policy model and controls a simulator to follow the instructions.
-
-    Args:
-        model: The policy model to run inference on.
-        infer_path: The path to save the output images and plots.
-        infer_cfg: The config for the inference, including the environment name, instruction text,
-            and max steps to run.
-    """
-    from MCMD_Sim.simulator.simulator_mcmd_exp import MCMDSimEval
-    import pandas as pd
-    
-    init_cond = json.load(open(infer_cfg.init_cond_path, 'r'))
-    init_cond['data_path'] = None
-    init_cond['log_path'] = infer_path
-    with open(os.path.join(infer_cfg.eval_path, 'label.txt'), 'r') as f:
-        text = int(f.read())
-
-    vel_cv = pd.read_csv(os.path.join(infer_cfg.eval_path, 'vel_cmds.csv'))
-    sim = MCMDSimEval(init_cond, 3)
-
-    with torch.no_grad():
-        for iter in tqdm(range(len(vel_cv))):
-            vel_cmd = vel_cv.iloc[iter]
-            _ = sim.step_action(vel_cmd)
-
-    log_dir = sim.close()
-    with open(os.path.join(log_dir, "instruction_text.txt"), "w") as file:
-        file.write(text)
-
-    return log_dir
+    return init_cond['log_dir']
 
 # ----------------- MAIN EXECUTION -----------------
 if __name__ == '__main__':
-    # Initialize Configuration
-    config = ExperimentConfig()
-    # torch.save(config, os.path.join(config.log_dir, "experiment_config.pth"))
-    set_seed(config.train_cfg.seed_value)
-    if config.mode == 'infer_eval':
-        log_dir = infer_eval(config.log_dir, config.infer_cfg)
-        config.json_dump(log_dir)
-    else:
-        # Load Policy and Model
-        policy = VITPolicy(cfg = config.policy_cfg) if config.policy_name == 'VIT' else LSTMPolicy(config.policy_cfg)
-        model = E2ENet(policy, config.train_cfg.device)
-        if config.checkpoint_path is not None:
-            model.load_checkpoint(config.checkpoint_path, config.new_ckpt_mode)
+    config = ExperimentConfig() # Initialize Configuration
+    prefix = ckpt.prefix 
+    # Load DataLoader, Policy and Model
+    if mode in {'train', 'eval', 'infer_eval'}:
+        dataset = FlightILDataset(
+            [DataConfig.data_path], train= mode == 'train', shuffle=DataConfig.shuffle, 
+            snippet_size=DataConfig.snippet_size, seq_length=DataConfig.seq_length, 
+            stride=DataConfig.stride, load_features_directly=True
+        )
+        # dataset.run_types = ['right_blue']
+        # dataset.run_types_wts = [1.0]   
+        data_loader = DataLoader(dataset, batch_size=DataConfig.batch_size, num_workers=DataConfig.num_workers)
 
-        if config.mode == 'train':
-            tensorboard_path = os.path.join(config.log_dir, 'tensorboard')
-            os.makedirs(tensorboard_path, exist_ok=True)
-            config.json_dump()
-            writer = SummaryWriter(log_dir=tensorboard_path)
-            model.train()
-            train_loader = get_data_loader(config.data_cfg)
-            train(model, train_loader, writer, config.train_cfg, config.log_dir)
-            writer.close()
-        elif config.mode == 'infer':
-            from MCMD_Sim.simulator.utils import generate_closed_loop_1drone_2ball_env_init, generate_instruction
-
-            sim_objs = [InferenceConfig.obj0, InferenceConfig.obj1]
+    policy = VITPolicy(cfg = config.policy_cfg) if config.policy_name == 'VIT' else LSTMPolicy(config.policy_cfg)
+    model = E2ENet(policy, config.device, feature_extraction=True)
+    if config.checkpoint_path is not None:
+        model.load_checkpoint(config.checkpoint_path, config.new_ckpt_mode)
+    # set_seed(config.train_cfg.seed_value)
+    model.eval()
+        
+    if config.mode == 'train':
+        tensorboard_path = os.path.join(config.log_dir, 'tensorboard')
+        os.makedirs(tensorboard_path, exist_ok=True)
+        writer = SummaryWriter(log_dir=tensorboard_path)
+        model.train()
+        train(model, data_loader, writer, config.train_cfg, config.log_dir)
+        writer.close()
+    elif config.mode == 'infer':
+        from MCMD_Sim.simulator.utils import generate_closed_loop_1drone_2ball_env_init, generate_instruction
+        for _ in range(30):
+            sim_objs = random.sample(['red ball', 'colorless rocket', 'colorless jeep', 'colorless dog', 'green ball'], 2)
+            command = random.choice(['above', 'below',])
+            target_idx = random.choice([0, 1])
             init_cond = generate_closed_loop_1drone_2ball_env_init(
                 env_name=InferenceConfig.env_name,
-                command=InferenceConfig.text_cmd,
-                target_idx=InferenceConfig.target_idx,
+                command=command,
+                target_idx=target_idx,
                 objs = sim_objs,
-                log_path=os.path.join(config.log_dir, 'infer_log'),
+                log_path=os.path.join(config.log_dir),
                 data_path=None
             )
-            target = sim_objs[InferenceConfig.target_idx].split(" ")[0]
-            text = generate_instruction(target, InferenceConfig.text_cmd)
-
-            model.eval()
-            log_dir = infer(model, init_cond, text)
+            target, obj_type = sim_objs[target_idx].split(" ")
+            text = generate_instruction(target, command, obj_type = obj_type if target == 'colorless' else None)
+            log_dir = infer(model, init_cond, text, prefix)
+            ExperimentConfig.log_dir = log_dir
             with open(os.path.join(log_dir, "instruction_text.txt"), "w") as file:
                 file.write(text)
-            config.json_dump(log_dir)
-        else:
-            eval_path = os.path.join(config.log_dir, 'eval')
-            os.makedirs(eval_path, exist_ok=True)
-            config.json_dump()
-            model.eval()
-            eval_loader = get_data_loader(config.data_cfg, mode_train=False)
-            evaluate(model, eval_loader, eval_path, config.train_cfg)
+    elif config.mode == 'infer2':
+        from MCMD_Sim.simulator.utils import generate_closed_loop_1drone_2ball_env_init, generate_instruction
+
+        sim_objs = [InferenceConfig.obj0, InferenceConfig.obj1]
+        init_cond = generate_closed_loop_1drone_2ball_env_init(
+            env_name=InferenceConfig.env_name,
+            command=InferenceConfig.text_cmd,
+            target_idx=InferenceConfig.target_idx,
+            objs = sim_objs,
+            log_path=os.path.join(config.log_dir),
+            data_path=None
+        )
+        target, obj_type = sim_objs[InferenceConfig.target_idx].split(" ")
+        text = generate_instruction(target, InferenceConfig.text_cmd, obj_type = obj_type if target == 'colorless' else None)
+
+        log_dir = infer(model, init_cond, text, prefix)
+        ExperimentConfig.log_dir = log_dir
+        with open(os.path.join(log_dir, "instruction_text.txt"), "w") as file:
+            file.write(text)
+
+    elif config.mode == 'eval':
+        evaluate(model, data_loader, prefix=prefix)
+
+    elif config.mode == 'infer_eval':
+        runs = evaluate(model, data_loader, prefix=prefix, max_eval_num=550)
+        icond_base = '/home/alex/flex/MCMD_Sim/results'
+        for run in runs:
+            run_path = os.path.join(ExperimentConfig.log_dir, prefix+run)
+            init_cond = json.load(open(
+                os.path.join(icond_base, run, 'init_conditions.json'), 'r'
+            ))
+            init_cond['data_dir'] = None
+            init_cond['log_dir'] = ExperimentConfig.log_dir
+            # model = CSVNet(os.path.join(run_path, 'eval_vel_cmds.csv'))
+            run_type = run.split('_')
+            run_type = run_type[0] + '_' + run_type[1][1:]
+            model = CSVNet2(os.path.join('/home/alex/flex/BLIP2_DATASET/train', run_type, run, 'data_out.csv'))
+            text = '_'.join(run.split("_")[:2])
+            infer(model, init_cond, text, prefix = 'ALL'+prefix+run)
+    else:
+        raise ValueError(f"Invalid mode: {config.mode}")
+    
+    config.json_dump()
 
 
 

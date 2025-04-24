@@ -1,15 +1,13 @@
 from typing import Any, Union, List, Optional
 import copy
-from omegaconf import DictConfig
-import hydra
-
+from omegaconf import DictConfig # type: ignore
+import hydra # type: ignore
 import torch
 from torch.nn import ModuleDict
-from lightning import LightningModule
-from lightning.pytorch.utilities import rank_zero_only
-from torchmetrics import MaxMetric, MeanMetric, MetricCollection
-from torchmetrics.regression.mse import MeanSquaredError
-from torchmetrics.regression.mae import MeanAbsoluteError
+from lightning import LightningModule # type: ignore
+from torchmetrics import MaxMetric, MeanMetric, MetricCollection # type: ignore
+from torchmetrics.regression.mse import MeanSquaredError # type: ignore
+from torchmetrics.regression.mae import MeanAbsoluteError # type: ignore
 
 from src.models.components.base import BaseNet
 from src.models.components.criterion import BaseCriterion
@@ -100,6 +98,8 @@ class FlightLitModule(LightningModule):
             'policy' : self.net.policy.state_dict(),
             'extractor_ll' : self.net.extractor.last_linear_layer.state_dict()
         }
+        if self.net.stop_flagger is not None:
+            checkpoint['state_dict']['stop_flagger'] = self.net.stop_flagger.state_dict()
     
     def on_train_epoch_end(self):
         pass
@@ -166,7 +166,7 @@ class FlightLitModule(LightningModule):
         self.log_dict(loss_tracker, on_step=True, prog_bar=True) #, on_epoch=True)
     
     def _log_metrics(self, metrics, preds, targets):
-        for key in self.net.output_names:
+        for key in preds:
             metrics[key](preds[key], targets[key])
         self.log_dict(metrics, on_step=False, on_epoch=True, prog_bar=True)
     

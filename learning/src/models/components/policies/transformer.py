@@ -1,8 +1,8 @@
 from typing import Optional
-from omegaconf import DictConfig
+from omegaconf import DictConfig # type: ignore
 from torch import nn
 
-from src.models.components.policies.base import BasePolicy
+from .base import BasePolicy
 
 
 class TransformerPolicy(BasePolicy):
@@ -16,7 +16,7 @@ class TransformerPolicy(BasePolicy):
         super().__init__()
         
         if model_type == "SimpleViT": 
-            from vit_pytorch import SimpleViT
+            from vit_pytorch import SimpleViT # type: ignore
             self.model = SimpleViT(
                 image_size=tuple(cfg.image_size),
                 patch_size=tuple(cfg.patch_size),
@@ -29,7 +29,7 @@ class TransformerPolicy(BasePolicy):
                 dim_head=cfg.dim_head,
             )
         elif model_type == "ViT":
-            from vit_pytorch import ViT
+            from vit_pytorch import ViT # type: ignore # type: ignore
             self.model = ViT(
                 image_size=tuple(cfg.image_size),
                 patch_size=tuple(cfg.patch_size),
@@ -44,7 +44,7 @@ class TransformerPolicy(BasePolicy):
                 dim_head=cfg.dim_head,
             )
         elif model_type == "DeepViT":
-            from vit_pytorch.deepvit import DeepViT
+            from vit_pytorch.deepvit import DeepViT # type: ignore # type: ignore
             self.model = DeepViT(
                 image_size=tuple(cfg.image_size),
                 patch_size=tuple(cfg.patch_size),
@@ -59,10 +59,10 @@ class TransformerPolicy(BasePolicy):
                 dim_head=cfg.dim_head,
             )
         elif model_type == "CaiT":
-            from vit_pytorch.cait import CaiT
+            from vit_pytorch.cait import CaiT # type: ignore
             raise NotImplementedError(f"Need to handle custom channels other than 3")
         elif model_type == "T2TViT":
-            from vit_pytorch.t2t import T2TViT
+            from vit_pytorch.t2t import T2TViT # type: ignore
             t2t_layers = tuple([tuple(v) for v in cfg.t2t_layers])
             assert isinstance(cfg.image_size, int), "only allow square image now"
             self.model = T2TViT(
@@ -76,7 +76,7 @@ class TransformerPolicy(BasePolicy):
                 t2t_layers=t2t_layers, # tuples of the kernel size and stride of each consecutive layers of the initial token to token module
             )
         elif model_type == "CCT":
-            from vit_pytorch.cct import CCT
+            from vit_pytorch.cct import CCT # type: ignore
             self.model = CCT(
                 img_size=cfg.img_size,
                 n_input_channels=cfg.n_input_channels,
@@ -100,22 +100,7 @@ class TransformerPolicy(BasePolicy):
 
         self.model_type = model_type
         self.cfg = cfg
-        self.lstm = None
-        if hidden_dim is not None:
-            self.lstm = nn.LSTM(
-                input_size=cfg.num_classes,
-                hidden_size=hidden_dim,
-                num_layers=lstm_layers,
-                batch_first=False          # Batch dim is actually sequence dim, one sequence at a time, can be changed later
-            )
-            self.hidden_state = None
-            self.fc = nn.Linear(hidden_dim, cfg.num_classes)
 
     def forward(self, x):
         out = self.model(x)
-        
-        if self.lstm is not None:
-            out, self.hidden_state = self.lstm(out, self.hidden_state)
-            out = self.fc(out)
-        
         return out

@@ -9,8 +9,10 @@ class Task(Enum):
     M_SHAPE = "2mshape"
     OPEN_DICT = "3open_dict"
 
-task = Task("3open_dict")
-env_name = "arena"
+task = Task("2rshape")
+env_name = "samurai"
+command = "towards"
+
 
 if task == Task.RB_2CHOICE:
     objects = ["red ball", "blue ball"]

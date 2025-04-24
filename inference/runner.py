@@ -1,105 +1,85 @@
 import os
 import sys
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(SCRIPT_DIR, ".."))
-sys.path.append(os.path.join(SCRIPT_DIR, "..", "gym-pybullet-drones"))
-sys.path.append(os.path.join(SCRIPT_DIR, "..", "gym-pybullet-drones", "gym_pybullet_drones", "examples"))
 from tqdm import tqdm
-from os import makedirs
 from argparse import ArgumentParser
 import numpy as np
-import copy
 
 import torch
 from PIL import Image
-from torchvision import transforms
-import hydra
-from lightning import LightningModule
-from omegaconf import OmegaConf
+from torchvision import transforms # type: ignore
+import hydra # type: ignore
+from lightning import LightningModule # type: ignore
+from omegaconf import OmegaConf # type: ignore
+from datetime import datetime
 
-from gym_pybullet_drones.examples.simulator_utils import get_x_y_z_yaw_relative_to_base_env
-from gym_pybullet_drones.examples.simulator_eval import EvalSimulator
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from config import generate_init_conditions
+from MCMD_Sim.simulator.simulator_mcmd_exp import MCMDSimEval
+from MCMD_Sim.simulator.utils.gen_init_cond import ICCLISchema2SimEnvSchema
+from MCMD_Sim.simulator.utils.tasks import generate_instruction
+from config import generate_init_conditions, env_name, command
 
 def cfg_2_model(cfg_path):
-    cfg = OmegaConf.load(cfg_path[0])
+    cfg = OmegaConf.load(os.path.join(cfg_path[0], "config"))
+    cfg.model.net.extractor.extract_features_flag = True
     model: LightningModule = hydra.utils.instantiate(cfg.model)
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print(f"Device: {device}")
+    ckpt_path_base = os.path.join(cfg_path[0], "checkpoints")
+    # raise ValueError(f"Check the checkpoint path {ckpt_path_base}")
+    ckpt_paths = sorted([f for f in os.listdir(ckpt_path_base) if f.endswith('.ckpt')])
 
-    if cfg.ckpt_path:
-        # if its a list load the last one
-        cpath = cfg.ckpt_path[0]
-        print(f"Loading checkpoint: {cpath}")
-        ckpt = torch.load(cpath, map_location=device)
-        for dropped_key in ["net.extractor._clip_param", "net.extractor._model_param", "net.extractor._dino_param"]:
-            if dropped_key in ckpt["state_dict"].keys():
-                ckpt["state_dict"].pop(dropped_key)  # HACK: remove param used for determining device
-        model.load_state_dict(ckpt["state_dict"])
+    if ckpt_paths:
+        cpath = os.path.join(ckpt_path_base, ckpt_paths[-1])
+        ckpt = torch.load(cpath, map_location=torch.device('cpu'), weights_only=False)
+        model.net.policy.load_state_dict(ckpt['state_dict']['policy'])
+        model.net.extractor.last_linear_layer.load_state_dict(ckpt['state_dict']['extractor_ll'])
 
-    return model.to(device)
+    pol_name = cfg.model.net.policy.get('model_type', 'LSTM')[-4:]
+    num_action = cfg.model.net.policy.cfg.get('num_classes', 4)
+    pol_meta = ''
+    if pol_name.lower().endswith('vit'):
+        psize = cfg.model.net.extractor.get('patch_size', 2)
+        nhead = cfg.model.net.policy.cfg.get('heads', 4)
+        depth = cfg.model.net.policy.cfg.get('depth', 3)
+        pol_meta = f'p{psize}h{nhead}d{depth}'
 
-def closed_loop_render_set(model, init_conditions, record_hz, closed_loop_save_path, text_instr=None,
-                           selected_index=None):
-    
-    assert closed_loop_save_path is not None
-    save_path = closed_loop_save_path[0]
-    makedirs(save_path, exist_ok=True)
+    dt = datetime.now().strftime("%S")
+    prefix = f'{pol_name}{num_action}{pol_meta}_{env_name}{dt}_'
 
+    return model.to(device), prefix
 
+def closed_loop_render_set(
+        model, 
+        init_conditions, 
+        record_hz, 
+        text_instr=None,
+        prefix = 'Experiment',
+        log_text=None,
+    ):
     # ! Setup Simulator
-    sim = EvalSimulator(save_path, init_conditions, record_hz, selected_index)
-    sim.setup_simulation()
-
+    sim = MCMDSimEval(init_conditions, record_hz, log_prefix=prefix)
+    image = sim.setup_simulation()[0]
     CLOSED_LOOP_NUM_FRAMES = 80
 
-    # init stabilization
-    vel_cmd = np.array([0, 0, 0, 0])
-    sim.vel_cmd_world = vel_cmd
-    updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
-    updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
-    pybullet_img = pybullet_img[None, :, :, 0:3]
+    with torch.no_grad():
+        for iter in tqdm(range(CLOSED_LOOP_NUM_FRAMES)):
+            image = Image.fromarray(image)
+            img = image.resize((224, 224))
+            img = transforms.ToTensor()(img).to('cuda:0')
 
-    init_forward = updated_position[0]
+            preds = model({"image": img, "text": text_instr})
 
-    unnormalized_vel_cmds = []
-    for _ in tqdm(range(CLOSED_LOOP_NUM_FRAMES)):
+            vel_cmd = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
+            image = sim.step_action(vel_cmd)
+            image = image[0]
+        
+        sim.logger.log_text(f'Text Command : {text_instr}')
+        if log_text is not None:
+            sim.logger.log_text(f'Log Text : {log_text}')
 
-        image = copy.deepcopy(pybullet_img)
-        # squeeze first dimension of image
-        image = image.squeeze(0)
-        image = Image.fromarray(image)
-        img = image.resize((224, 224))
-        # convert the image to a tensor
-        img = transforms.ToTensor()(img).to('cuda:0')
+    logger = sim.close()
+    return logger
 
-        text = text_instr
-
-        # run inference
-        preds = model.forward({"image": img, "text": text})
-
-        # convert dictionnary of 1D tensors to array of floating numbers
-        # dictionnary has 4 keys: "vx", "vy", "vz", "yaw"
-        out = torch.stack([preds["vx"], preds["vy"], preds["vz"], preds["yaw"]], dim=1).cpu().detach().numpy()
-
-        unnormalized_vel_cmds.append(out[0])
-        vel_cmd = out[0]  # shape: 1 x 4
-
-        # Put into simulator
-        updated_state, pybullet_img, finished = sim.dynamic_step_simulation(vel_cmd)
-        if finished:
-            break
-        pybullet_img = pybullet_img[None, :, :, 0:3]
-
-        updated_position = get_x_y_z_yaw_relative_to_base_env(updated_state, sim.theta_environment)
-        updated_position -= [init_forward, 0, 0.6, sim.theta_environment]
-
-    print("instruction_text: ", text)
-    with open(os.path.join(save_path, "instruction_text.txt"), "w") as file:
-        file.write(text)
-    sim.export_plots()
-    np.savetxt(os.path.join(save_path, "vel_cmds_unnorm.csv"), np.array(unnormalized_vel_cmds), delimiter=",")
 
 
 if __name__ == "__main__":
@@ -108,19 +88,20 @@ if __name__ == "__main__":
     parser.add_argument("--cfg_path", nargs='*', default=None, type=str)
     parser.add_argument("--closed_loop_save_path", nargs='*', default=None, type=str)
     parser.add_argument("--objects_color", nargs='*', default=None, type=str)
-    parser.add_argument('--text_instr', type=str, default="", help='Text instruction')
     parser.add_argument('--selected_index', type=int, default=0, help='Selected index')
     args = parser.parse_args()
 
     closed_loop_save_path = getattr(args, "closed_loop_save_path", None)
-    print(f"closed_loop_save_path: {closed_loop_save_path}")
-    params_paths = getattr(args, "params_paths", None)
-    checkpoint_paths = getattr(args, "checkpoint_paths", None)
 
-    init_conditions = generate_init_conditions(args.objects_color,
-                                                1, # don't care about this
-                                                closed_loop_save_path)
+    init_conditions = generate_init_conditions(args.objects_color)
+    init_conditions = ICCLISchema2SimEnvSchema(
+        init_conditions, 
+        env_name=env_name, 
+        target_idx=args.selected_index, 
+        command=command,
+        log_path=closed_loop_save_path[0],
+    )
 
-    model = cfg_2_model(args.cfg_path)
-    closed_loop_render_set(model, init_conditions, 3, closed_loop_save_path, args.text_instr,
-                           args.selected_index)
+    model, prefix = cfg_2_model(args.cfg_path)
+    text_instr = generate_instruction(direction=command, obj_type=args.objects_color[args.selected_index])
+    closed_loop_render_set(model, init_conditions, 3, text_instr, prefix=prefix, log_text=args.cfg_path[0])

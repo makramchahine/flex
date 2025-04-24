@@ -1,0 +1,75 @@
+# @package _global_
+
+defaults:
+  - override /data: flight.yaml
+  - override /model: flight.yaml
+  - override /model/extractor@model.net.extractor: blip
+  - override /model/policy@model.net.policy: svit3
+  - override /callbacks@callbacks: 
+    - default
+    - backbone_finetuning
+
+tags: ["flight"]
+
+seed: 42
+
+trainer:
+  max_steps: 1000000
+  limit_val_batches: 10
+  val_check_interval: 2000
+  # log_every_n_steps: 50
+  strategy: ddp_spawn # NOTE: since we are using simulators for data generation and model evaluation
+
+model:
+  optimizer:
+    lr: 0.0001
+
+  net:
+    extractor:
+      extract_features_flag: false
+      use_masked_patch_wise_feature: true
+      use_visual_encoder_only: false
+      patch_size: 2
+      all_q_dims: false
+      use_low_dim_feature: false
+      last_linear_layer: [768, 64]
+
+    policy:
+      cfg:
+        channels: 64
+        image_size: [8, 8]
+        num_classes: 4
+        depth: 3
+        heads: 5
+        dim: 128
+        dim_head: 32
+    
+    stop_flagger_cfg:
+      name: transformer
+      in_dim: 128
+      hidden_dim: 32
+      stop_only: true
+
+data:
+  batch_size: 32
+  num_workers: 23
+  flag_last_num: 5
+  load_features_directly: true
+  use_standardize: false
+  use_lavis_preprocess: true
+  lavis_preprocess_cfg:
+    name: BlipImageEvalProcessor
+
+callbacks:
+  model_checkpoint:
+    save_last: true
+    every_n_train_steps: 25000
+    save_top_k: -1
+
+# otherwise will cause "RuntimeError: unable to open shared memory object </torch_xxx> in read-write mode"
+# reference: https://github.com/facebookresearch/maskrcnn-benchmark/issues/103#issuecomment-785815218
+pytorch_sharing_strategy: file_system
+
+ckpt_path:
+  - /home/alex/flex/local/train_flight/2025-04-14/02-07-39/checkpoints/step_1000000.ckpt
+ckpt_new_mode: true

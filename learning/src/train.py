@@ -1,13 +1,13 @@
 from typing import List, Optional, Tuple
 
-import hydra
-import lightning as L
-import pyrootutils
+import hydra # type: ignore
+import lightning as L # type: ignore
+import pyrootutils # type: ignore
 import torch
-from lightning import Callback, LightningDataModule, LightningModule, Trainer
-from lightning.pytorch.loggers import Logger
-from omegaconf import DictConfig, OmegaConf
-from hydra.core.hydra_config import HydraConfig
+from lightning import Callback, LightningDataModule, LightningModule, Trainer # type: ignore
+from lightning.pytorch.loggers import Logger # type: ignore
+from omegaconf import DictConfig, OmegaConf # type: ignore
+from hydra.core.hydra_config import HydraConfig # type: ignore
 
 pyrootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
@@ -70,14 +70,17 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
         cpath = cfg.ckpt_path[0]
         print(f"Loading checkpoint: {cpath}")
         ckpt = torch.load(cpath, map_location=device, weights_only=False)
+        ckpt = ckpt['state_dict']
         if cfg.ckpt_new_mode:
-            model.net.policy.load_state_dict(ckpt['state_dict']['policy'])
-            model.net.extractor.last_linear_layer.load_state_dict(ckpt['state_dict']['extractor_ll'])
+            model.net.policy.load_state_dict(ckpt['policy'])
+            model.net.extractor.last_linear_layer.load_state_dict(ckpt['extractor_ll'])
+            if model.net.stop_flagger is not None and "stop_flagger" in ckpt.keys():
+                model.net.stop_flagger.load_state_dict(ckpt['stop_flagger'])
         else:
             for dropped_key in ["net.extractor._clip_param", "net.extractor._model_param", "net.extractor._dino_param"]:
-                if dropped_key in ckpt["state_dict"].keys():
-                    ckpt["state_dict"].pop(dropped_key) # HACK: remove param used for determining device
-            model.load_state_dict(ckpt["state_dict"], strict=False)
+                if dropped_key in ckpt.keys():
+                    ckpt.pop(dropped_key) # HACK: remove param used for determining device
+            model.load_state_dict(ckpt, strict=False)
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = utils.instantiate_callbacks(cfg.get("callbacks"))
@@ -89,13 +92,13 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
     profiler_type = cfg.get("profiler_type", None)
     profiler_kwargs = {"dirpath": HydraConfig.get().runtime.output_dir, "filename": "profiler"}
     if profiler_type == "simple":
-        from lightning.pytorch.profilers import SimpleProfiler
+        from lightning.pytorch.profilers import SimpleProfiler # type: ignore
         profiler = SimpleProfiler(**profiler_kwargs)
     elif profiler_type == "advance":
-        from lightning.pytorch.profilers import AdvancedProfiler
+        from lightning.pytorch.profilers import AdvancedProfiler # type: ignore
         profiler = AdvancedProfiler(**profiler_kwargs)
     elif profiler_type == "pytorch":
-        from lightning.pytorch.profilers import PyTorchProfiler
+        from lightning.pytorch.profilers import PyTorchProfiler # type: ignore
         profiler = PyTorchProfiler(**profiler_kwargs)
     else:
         profiler = None

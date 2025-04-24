@@ -20,7 +20,7 @@ parser.add_argument("--env", type=str, required=True)
 args = parser.parse_args()
 
 # path to the folders
-path = "/home/makramchahine/repos/flex/inference/results/"
+path = "/home/alex/flex/inference/results/"
 
 # list the folders and keep track of their names
 folders = os.listdir(path)
@@ -38,6 +38,10 @@ models = models_np.union(models_pp).union(models_fi)
 # sort the models
 models = list(models)
 models.sort()
+
+
+# hack for single model at a time
+models = ["resnet"]
 
 SR = np.zeros((len(models)))
 
