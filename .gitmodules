@@ -1,3 +1,6 @@
 [submodule "gym-pybullet-drones"]
 	path = gym-pybullet-drones
 	url = https://github.com/makramchahine/gym-pybullet-drones.git
+[submodule "mNavSim"]
+	path = mNavSim
+	url = https://github.com/mk314k/mNavSim.git
